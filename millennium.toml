@@ -1,9 +1,9 @@
 [plugin]
-id = "com.example.boilerplate"
-name = "Boilerplate Plugin"
-version = "1.0.0"
-author = "Millennium"
-description = "A template plugin for Millennium."
+id = "com.steamadvancedcollections.plugin"
+name = "Steam Advanced Collections"
+version = "0.2.1"
+author = "NilsBzH"
+description = "Advanced filtering and exclusion rules for Steam collections."
 
 [assets]
 # reference resources to be included inside the plugin at compile time
@@ -45,21 +45,10 @@ entry = "webview/preload.ts"
 # output path
 # auto = automatically detect Millennium installation and install plugin
 # any other path = used as the output path for the build
-output_path = "auto"
+output_path = ".millennium/build/com.steamadvancedcollections.plugin.star"
 
-[dev]
-# plugin_name = "com.example.boilerplate"     # defaults to [plugin].id
-# socket = "/tmp/millennium-mep.sock"         # defaults to platform MEP path
-
-# Restart the plugin backend on any source change (default: true).
-auto_restart = true
-
-# Reload Steam's UI frontend after a restart, depending on which files changed:
-#   "never"    = never reload the UI (default)
-#   "backend"  = reload when .lua files changed
-#   "frontend" = reload when .ts/.tsx/.js/.jsx/.css files changed
-#   "both"     = reload on any source change
-reload_steamui_when = "both"
+# Builds stay local and never restart a plugin or reload Steam automatically.
+# Starlight 1.1.5 pack restarts even with dev.auto_restart=false.
 
 [inspect]
 depth = 4

@@ -1,58 +1,63 @@
-import { definePlugin, Field } from 'millennium';
-import { useEffect, useState } from 'react';
+import { afterPatch, beforePatch, definePlugin, EUIMode, findModuleExport, routerHook } from 'millennium';
+import { AdvancedCollections, log } from './app';
+import { RuleRepository } from './rules/repository';
+import { millenniumConfigPort } from './rules/millennium-config';
+import { EditorPortals } from './ui/EditorPortals';
+import { startDiagnostics, type SteamEnvironment } from './diagnostics/runtime';
 
-const SettingsContent = () => {
-	return <Field label="Hello, World!" />;
+let application: AdvancedCollections | undefined;
+let stopDiagnostics: (() => void) | undefined;
+let mounted = false;
+
+/** The source patch consults this bridge dynamically; missing/stopped plugins use native behavior. */
+/** @ffi */
+export const integration = {
+	hasRules: (collection: Record<string, any>): boolean => application?.membership.hasRules(collection) ?? false,
+	matches: (collection: Record<string, any>, game: Record<string, any>): boolean | undefined => application?.membership.matches(collection, game),
 };
 
 /** @ffi */
-export function subtract(a: number, b: number): { difference: number; a: number; b: number } {
-	console.log('Substracting', a, 'from', b);
-	return { difference: a - b, a, b };
-}
-
-const Icon = () => {
-	const [icon, setIcon] = useState<string>();
-
-	useEffect(() => {
-		console.log('Getting icon...');
-		backend.getSteamBrewIconResource().then(setIcon);
-	}, []);
-
-	return (
-		<div
-			className="SteamClientHomebrewIcon"
-			style={{
-				width: '16px',
-				height: '16px',
-				marginRight: '5px',
-			}}
-			dangerouslySetInnerHTML={{ __html: icon }}
-		/>
-	);
-};
-
-/** @ffi */
-export const hookedSettingsIcon = {
-	SteamButton: () => <Icon />,
-};
-
-async function initializePlugin() {
-	console.log('Frontend initialized');
-
-	const sum = await backend.add(100, 100, 100);
-	console.log('add result:', sum);
-
-	console.warn('Example warning', { sum, threshold: 150 });
-	console.error('Example error', new Error('example error'));
+export function disposePlugin(): boolean {
+	if (mounted) { try { routerHook.removeGlobalComponent('SteamAdvancedCollectionsEditors', EUIMode.Desktop); } catch { log('editor.cleanup unavailable'); } }
+	mounted = false;
+	application?.dispose(); application = undefined;
+	stopDiagnostics?.(); stopDiagnostics = undefined;
+	window.removeEventListener('beforeunload', disposePlugin);
+	return true;
 }
 
 export default definePlugin(() => {
-	initializePlugin();
-
+	disposePlugin();
+	const environment = globalThis as unknown as SteamEnvironment;
+	const repository = new RuleRepository(millenniumConfigPort());
+	const running = new AdvancedCollections(environment, repository, (target, method, callback) => {
+		const patch = afterPatch(target, method, (args, result) => {
+			try { callback(args, result); } catch { /* Preserve native event processing. */ }
+			return result;
+		});
+		return () => patch.unpatch();
+	});
+	application = running;
+	stopDiagnostics = startDiagnostics({
+		environment,
+		observe: (target, method, callback) => {
+			const patch = beforePatch(target, method, callback);
+			return () => patch.unpatch();
+		},
+		findFamilyService: () => findModuleExport((value) =>
+			value != null && typeof value.GetSharedLibraryApps === 'function'),
+		log: (record) => console.info('[SAC:POC]', JSON.stringify(record)),
+	});
+	try {
+		routerHook.addGlobalComponent('SteamAdvancedCollectionsEditors', () => <EditorPortals app={running} />, EUIMode.Desktop);
+		mounted = true;
+	} catch { log('editor.mount unavailable; rules and diagnostics remain isolated'); }
+	// Configuration and Steam stores do not become ready in a fixed order.
+	// The application restores rules as soon as both are ready, without an editor.
+	void running.start();
+	window.addEventListener('beforeunload', disposePlugin);
 	return {
-		title: 'My Plugin',
-		icon: <Icon />,
-		content: <SettingsContent />,
+		icon: <span aria-hidden="true">◇</span>,
+		onDismount: () => { disposePlugin(); },
 	};
 });

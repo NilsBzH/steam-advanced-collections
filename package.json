@@ -2,11 +2,14 @@
   "scripts": {
     "dev": "./node_modules/.bin/starlight watch",
     "build": "./node_modules/.bin/starlight pack",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
     "prepare": "./node_modules/.bin/starlight lsp"
   },
   "devDependencies": {
+    "@steambrew/starlight": "^1.1.3",
     "@types/react": "19.1.1",
     "@types/react-dom": "19.1.1",
-    "@steambrew/starlight": "^1.1.3"
+    "typescript": "5.9.3"
   }
 }

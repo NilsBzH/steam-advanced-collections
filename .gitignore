@@ -1,3 +1,4 @@
 node_modules/
 /.millennium
 .millennium/lsp/
+AGENTS.md
