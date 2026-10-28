@@ -1,15 +1,28 @@
-# Steam Advanced Collections
+# Steam Advanced Collections 0.3.1
 
 An extension of Steam's native dynamic collections for Millennium. The **Advanced Filters** panel appears only when the native dynamic collection editor is open. No separate collection management interface is introduced, and static collections are left untouched.
 
 ## Features and Behavior
 
 - Filter games by Steam tags, categories, personal ownership or Steam Families, local installation status, Steam library folder, and Windows drive.
-- Create nested AND / OR condition groups and apply NOT negation to individual conditions or entire groups.
-- Draft changes never affect the collection. **Save** persists the rules for the current collection through Millennium's configuration system and triggers native membership recalculation. **Cancel** discards the draft.
+- Build collapsible, nested groups using **All conditions must match** or **At least one condition must match**. Use **Is / Is not** on conditions and **Invert group** to exclude a whole group. Add and remove conditions and groups where they belong, without technical wrapper controls.
+- The Steam-inspired panel uses compact selectors, distinct group borders and responsive rows. UI copy is centralized in `frontend/ui/text.ts` for future localization; this version is English only.
+- Draft changes temporarily update the open collection's native Steam cover grid. **Save** persists the rules through Millennium's verified configuration path. **Cancel**, closing the editor, or switching collections discards the temporary override and restores saved rules immediately.
 - Advanced filters are combined with Steam's native filter predicate using AND. Steam's manual additions and exclusions retain their native priority.
 - Rules are stored separately for each Steam account and opaque collection ID, using `rules.v1:*` configuration keys. No internal Steam configuration files are modified directly.
 - Steam events trigger deferred recalculation. An installation check every 30 seconds handles potentially missed notifications.
+
+## Live Preview
+
+After a **250 ms debounce**, a valid draft temporarily overrides the advanced rules consulted by the existing membership bridge for the exact open collection object and Steam account. Only that collection's native `UpdateAllApps` method is requested. Steam updates its own cover grid; there is no parallel grid, text list, estimated count, or separate full-library preview scan. A discreet **Live preview** indicator appears while a temporary override is active.
+
+Steam's native filter remains combined with the advanced expression using AND. Its original calculation still applies manual additions and removals in their native order. Unknown metadata keeps the existing three-valued fallback. Native filter changes naturally use the active draft through the same bridge; the preview does not observe `UpdateApps` or schedule a recalculation from a recalculation event.
+
+Drafts exist **only in memory**. Previewing never writes Millennium configuration or invokes native `Save`, `AddApps`, or `RemoveApps`. **Save** verifies persistent storage before releasing the override and retaining the saved result. **Cancel** restores saved membership synchronously. Editor removal releases the draft before the React portal is removed; changing collections also disposes the previous editor's timer and override. Account changes, replaced collection objects, plugin unload, and Steam restarts cannot reuse a temporary draft. An incomplete condition cancels the active preview until the draft is valid again.
+
+Each settled edit requests one targeted recalculation. Rendering, collapsing groups and unchanged runtime notifications do not schedule preview work. Pending timers are cancelled on edits and cleanup. Existing library/install event handling and its 30-second fallback remain available for automatic saved-collection updates. No new source patches or dependencies were added.
+
+Live preview requires the existing native bridge marker and initialized native filter/exception fields. If those APIs are unavailable, no temporary calculation is attempted; native behavior and saved data are preserved. As before, Steam's internal API compatibility and the availability of ownership/install metadata remain limitations.
 
 ## Development and Building
 
@@ -46,9 +59,9 @@ Startup tests cover delayed account and collection availability, collection obje
 
 ## Architecture
 
-- `frontend/rules/`: Validated rule model, pure three-valued evaluation, and per-collection persistence. The evaluator is iterative and independent of React and Steam.
-- `frontend/steam/`: Metadata adaptation, collection editor targeting, and native membership bridge.
-- `frontend/ui/`: Visual rule editor and React portals mounted inside marked native collection editors.
+- `frontend/rules/`: Validated rule model, pure three-valued evaluation, per-collection persistence, and isolated draft sessions. The evaluator is iterative and independent of React and Steam. Nesting has no new business depth limit; existing configuration size and validation safeguards still apply.
+- `frontend/steam/`: Metadata adaptation, editor targeting, native membership bridge, and memory-only preview leases with debounced targeted recalculation.
+- `frontend/ui/`: Visual rule editor, live-preview indicator, centralized English copy, scoped styles, and React portals mounted inside marked native collection editors.
 - `frontend/diagnostics/`: Preserved proof-of-concept diagnostics.
 - `backend/diagnostic_patch.lua`: Two scoped transformations of the served JavaScript, without modifying Steam files. The first marks the editor; the second extends the existing membership calculation. The selector supports both Windows and POSIX path separators.
 
@@ -89,8 +102,8 @@ If the panel disappears following an update, check the logs and restart Steam ra
 ## Testing in Steam
 
 1. Open a dynamic collection and click its gear icon. The **Advanced Filters** panel should appear below the native filters. Close the editor or open a static collection to verify that the panel disappears.
-2. Add a condition or group, toggle NOT, then click **Cancel** to verify that draft changes are discarded without modifying saved rules.
-3. To test actual filtering, choose a known condition, enable advanced rules, and click **Save**. Verify the resulting games, native filters, and manual membership exceptions. Disable advanced rules and click **Save** to restore native filtering behavior.
+2. Change a known condition with advanced rules enabled. After about 250 ms, **Live preview** should appear and the native cover grid should change. Click **Cancel**: the original covers and saved rules must return immediately. Repeat an edit, then close the editor or switch collections to verify the same restoration.
+3. Repeat a known edit and click **Save**. The displayed result should remain and the rule should persist on reopening. Native filters and manual exceptions retain their priority. Disable advanced rules and click **Save** to restore native filtering behavior.
 4. Restart Steam to verify persistence. Installation or library changes can then be tested when desired.
 
 Functional log messages begin with `[SAC]`, while preserved diagnostic messages begin with `[SAC:POC]`.
@@ -99,6 +112,6 @@ Functional log messages begin with `[SAC]`, while preserved diagnostic messages 
 
 `membership.hook observed` confirms that the native membership bridge was executed.
 
-Automated tests cover the rule engine, persistence, metadata, editor targeting, transformations against actual Steam client code, and simulated native membership calculations.
+Automated tests cover the rule engine, compiled persistence adapter, startup restoration, metadata, editor targeting, transformations against actual Steam client code, and simulated native membership calculations. They also cover compiled JSX interactions, Save/Cancel conflicts, temporary native membership, closing and switching editors, exact account/object isolation, no draft persistence, plugin unload/restart, missing APIs, manual exceptions, unknown metadata, debounce cancellation and the absence of recalculation loops.
 
 Activating and persisting rules on actual user collections remains an explicit manual verification step.

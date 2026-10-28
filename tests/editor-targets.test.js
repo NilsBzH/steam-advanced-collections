@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { collectTargets } from '../frontend/steam/editor-targets';
+import { collectTargets, isOpenEditor } from '../frontend/steam/editor-targets';
 
 class Element {
 	constructor(id) { this.id = id; this.children = []; this.style = {}; this.attributes = {}; }
@@ -33,4 +33,18 @@ test('missing collections or failed lookups never modify the native editor', () 
 	const document = { querySelectorAll: () => [editor], createElement: () => { throw Error('must not create'); } };
 	const app = { environment: { collectionStore: { GetCollection: () => { throw Error('not loaded'); } } } };
 	expect(collectTargets(document, app, owned)).toEqual([]); expect(editor.children).toEqual([]);
+});
+test('closing or reusing a native editor releases its preview before removing the portal root', () => {
+	const editor = new Element('first'), owned = new Map(); let visible = [editor];
+	const document = { querySelectorAll: () => visible, createElement: () => new Element() };
+	let cleanups = 0;
+	const app = { environment: { collectionStore: { GetCollection: () => ({ bIsDynamic: true, bIsEditable: true }) } }, closePreview: (scope) => { expect(scope).toBe(editor); expect(scope.children.length).toBe(1); cleanups++; } };
+	collectTargets(document, app, owned); editor.id = 'next'; collectTargets(document, app, owned); expect(cleanups).toBe(1);
+	visible = []; collectTargets(document, app, owned); expect(cleanups).toBe(2); expect(editor.children.length).toBe(0);
+});
+test('preview guards require a connected, open editor with the exact collection ID', () => {
+	const editor = { isConnected: true, getAttribute: (name) => name === 'data-sac-editor-open' ? 'true' : 'first' };
+	expect(isOpenEditor(editor, 'first')).toBe(true); expect(isOpenEditor(editor, 'second')).toBe(false);
+	editor.isConnected = false; expect(isOpenEditor(editor, 'first')).toBe(false);
+	editor.isConnected = true; editor.getAttribute = () => 'false'; expect(isOpenEditor(editor, 'first')).toBe(false);
 });

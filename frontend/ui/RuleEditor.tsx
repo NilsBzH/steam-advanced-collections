@@ -1,69 +1,70 @@
+import { useState } from 'react';
 import type { Condition, Field, Rule } from '../rules/model';
+import { describeRule, editorRoot, invertRule, newCondition } from '../rules/editing';
 import type { Catalog, Choice } from '../steam/metadata';
+import { text } from './text';
 
-export function newCondition(field: Field): Condition {
-	switch (field) {
-		case 'tag': case 'category': return { type: 'condition', field, value: 0 };
-		case 'ownership': return { type: 'condition', field, value: 'personal' };
-		case 'installed': return { type: 'condition', field, value: true };
-		case 'library': case 'drive': return { type: 'condition', field, value: '' };
-	}
-}
-function Choices({ choices, value, onChange, label }: { choices: Choice[]; value: string; onChange: (value: string) => void; label: string }) {
-	return <select aria-label={label} value={value} onChange={(event) => onChange(event.currentTarget.value)}>
-		<option value="">Choose a value…</option>
+function Choices({ choices, value, onChange }: { choices: Choice[]; value: string; onChange: (value: string) => void }) {
+	return <select className="sac-value" aria-label={text.conditionValue} value={value} onChange={(event) => onChange(event.currentTarget.value)}>
+		<option value="">{text.choose}</option>
 		{value && !choices.some((choice) => choice.value === value) && <option value={value}>{value}</option>}
 		{choices.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
 	</select>;
 }
 function ConditionEditor({ rule, catalog, onChange }: { rule: Condition; catalog: Catalog; onChange: (rule: Condition) => void }) {
-	let editor;
 	switch (rule.field) {
 		case 'tag': case 'category':
-			editor = <Choices choices={rule.field === 'tag' ? catalog.tags : catalog.categories} value={rule.value ? String(rule.value) : ''} label="Condition value" onChange={(value) => onChange({ ...rule, value: Number(value) })} />;
-			break;
+			return <Choices choices={rule.field === 'tag' ? catalog.tags : catalog.categories} value={rule.value ? String(rule.value) : ''} onChange={(value) => onChange({ ...rule, value: Number(value) })} />;
 		case 'ownership':
-			editor = <Choices choices={[{ value: 'personal', label: 'Personal license' }, { value: 'family', label: 'Steam Families' }]} value={rule.value} label="Ownership" onChange={(value) => onChange({ ...rule, value: value as 'personal' | 'family' })} />;
-			break;
+			return <Choices choices={[{ value: 'personal', label: text.personal }, { value: 'family', label: text.family }]} value={rule.value} onChange={(value) => onChange({ ...rule, value: value as 'personal' | 'family' })} />;
 		case 'installed':
-			editor = <Choices choices={[{ value: 'true', label: 'Installed locally' }, { value: 'false', label: 'Not installed locally' }]} value={String(rule.value)} label="Installation status" onChange={(value) => onChange({ ...rule, value: value === 'true' })} />;
-			break;
+			return <Choices choices={[{ value: 'true', label: text.installed }, { value: 'false', label: text.uninstalled }]} value={String(rule.value)} onChange={(value) => onChange({ ...rule, value: value === 'true' })} />;
 		case 'library': case 'drive':
-			editor = <Choices choices={rule.field === 'library' ? catalog.libraries : catalog.drives} value={rule.value} label="Installation location" onChange={(value) => onChange({ ...rule, value })} />;
-			break;
+			return <Choices choices={rule.field === 'library' ? catalog.libraries : catalog.drives} value={rule.value} onChange={(value) => onChange({ ...rule, value })} />;
 	}
-	return <>
-		<select aria-label="Condition type" value={rule.field} onChange={(event) => onChange(newCondition(event.currentTarget.value as Field))}>
-			<option value="tag">Steam tag</option><option value="category">Steam category</option>
-			<option value="ownership">Ownership</option><option value="installed">Installation status</option>
-			<option value="library">Steam library folder</option><option value="drive">Installation drive</option>
-		</select>
-		{editor}
-	</>;
+}
+function Remove({ group, onRemove }: { group?: boolean; onRemove?: () => void }) {
+	return onRemove ? <button className="sac-remove" type="button" title={group ? text.removeGroup : text.removeCondition} aria-label={group ? text.removeGroup : text.removeCondition} onClick={onRemove}>×</button> : null;
 }
 
-export function RuleEditor({ rule, catalog, onChange, onRemove }: { rule: Rule; catalog: Catalog; onChange: (rule: Rule) => void; onRemove?: () => void }) {
-	const negated = rule.type === 'not';
-	const node = negated ? rule.child : rule;
-	const change = (next: Rule) => onChange(negated ? { type: 'not', child: next } : next);
-	return <div className={`sac-rule ${node.type === 'group' ? 'sac-group' : ''}`}>
-		<div className="sac-rule-row">
-			<button type="button" aria-label="Negate condition or group" aria-pressed={negated} className={negated ? 'sac-selected' : ''} onClick={() => onChange(negated ? node : { type: 'not', child: rule })}>NOT</button>
-			{node.type === 'group' ? <select aria-label="Group operator" value={node.operator} onChange={(event) => change({ ...node, operator: event.currentTarget.value as 'and' | 'or' })}>
-				<option value="and">AND — all conditions</option><option value="or">OR — any condition</option>
-			</select> : node.type === 'condition' ? <ConditionEditor rule={node} catalog={catalog} onChange={change} /> : <span>NOT group</span>}
-			<button type="button" aria-label="Wrap in a new group" onClick={() => onChange({ type: 'group', operator: 'and', children: [rule] })}>Group</button>
-			{onRemove && <button type="button" aria-label="Remove condition or group" onClick={onRemove}>Remove</button>}
-		</div>
-		{node.type === 'group' ? <>
-			<div className="sac-children">{node.children.map((child, index) => <RuleEditor key={index} rule={child} catalog={catalog}
-				onChange={(next) => change({ ...node, children: node.children.map((value, i) => i === index ? next : value) })}
-				onRemove={() => change({ ...node, children: node.children.filter((_, i) => i !== index) })} />)}</div>
-			<div className="sac-rule-row">
-				<button type="button" onClick={() => change({ ...node, children: [...node.children, newCondition('tag')] })}>+ Condition</button>
-				<button type="button" onClick={() => change({ ...node, children: [...node.children, { type: 'group', operator: 'and', children: [] }] })}>+ Group</button>
-				{node.children.length === 0 && <span className="sac-hint">{node.operator === 'and' ? 'No additional constraint' : 'Empty OR matches no games'}</span>}
-			</div>
-		</> : node.type === 'not' ? <div className="sac-children"><RuleEditor rule={node} catalog={catalog} onChange={change} /></div> : null}
+function RuleNode({ rule, catalog, onChange, onRemove }: { rule: Rule; catalog: Catalog; onChange: (rule: Rule) => void; onRemove?: () => void }) {
+	const [collapsed, setCollapsed] = useState(false);
+	const { node, inverted } = describeRule(rule);
+	const change = (next: Rule) => onChange(invertRule(next, inverted));
+	if (node.type === 'condition') return <div className="sac-condition">
+		<select className="sac-field" aria-label={text.conditionType} value={node.field} onChange={(event) => change(newCondition(event.currentTarget.value as Field))}>
+			{(Object.keys(text.fields) as Field[]).map((field) => <option key={field} value={field}>{text.fields[field]}</option>)}
+		</select>
+		<select className="sac-operator" aria-label={text.conditionOperator} value={inverted ? 'not' : 'is'} onChange={(event) => onChange(invertRule(node, event.currentTarget.value === 'not'))}>
+			<option value="is">{text.is}</option><option value="not">{text.isNot}</option>
+		</select>
+		<ConditionEditor rule={node} catalog={catalog} onChange={change} />
+		<Remove onRemove={onRemove} />
 	</div>;
+	return <div className={`sac-group${inverted ? ' sac-inverted' : ''}`}>
+		<div className="sac-group-heading">
+			<button className="sac-disclosure" type="button" aria-label={collapsed ? text.expand : text.collapse} aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}>{collapsed ? '▸' : '▾'}</button>
+			<select className="sac-group-match" aria-label={text.groupMatch} value={node.operator} onChange={(event) => change({ ...node, operator: event.currentTarget.value as 'and' | 'or' })}>
+				<option value="and">{text.all}</option><option value="or">{text.any}</option>
+			</select>
+			<label className="sac-invert"><input type="checkbox" checked={inverted} onChange={(event) => onChange(invertRule(node, event.currentTarget.checked))} />{text.invertGroup}</label>
+			<Remove group onRemove={onRemove} />
+		</div>
+		{collapsed ? <p className="sac-group-summary">{inverted ? `${text.invertedGroup} · ` : ''}{text.conditionCount(node.children.length)}</p> : <>
+			<div className="sac-children">{node.children.map((child, index) => <RuleNode key={index} rule={child} catalog={catalog}
+				onChange={(next) => change({ ...node, children: node.children.map((value, i) => i === index ? next : value) })}
+				onRemove={() => change({ ...node, children: node.children.filter((_, i) => i !== index) })} />)}
+				{node.children.length === 0 && <p className="sac-hint sac-empty">{node.operator === 'and' ? text.emptyAll : text.emptyAny}</p>}
+			</div>
+			<div className="sac-group-actions">
+				<button type="button" onClick={() => change({ ...node, children: [...node.children, newCondition('tag')] })}>+ {text.addCondition}</button>
+				<button type="button" onClick={() => change({ ...node, children: [...node.children, { type: 'group', operator: 'and', children: [] }] })}>+ {text.addGroup}</button>
+			</div>
+		</>}
+	</div>;
+}
+
+export function RuleEditor({ rule, catalog, onChange }: { rule: Rule; catalog: Catalog; onChange: (rule: Rule) => void }) {
+	// Legacy single-condition rules get a virtual group without a storage rewrite.
+	return <RuleNode rule={editorRoot(rule)} catalog={catalog} onChange={onChange} />;
 }

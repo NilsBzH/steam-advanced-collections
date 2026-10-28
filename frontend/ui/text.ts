@@ -1,0 +1,22 @@
+/** English UI copy lives here so a future locale can replace one catalog. */
+export const text = {
+	title: 'Advanced Filters', enable: 'Enable advanced rules',
+	intro: 'Narrow this collection with additional conditions. Steam’s filters and manual exceptions still apply.',
+	all: 'All conditions must match', any: 'At least one condition must match',
+	is: 'Is', isNot: 'Is not', invertGroup: 'Invert group', invertedGroup: 'Excluded group',
+	addCondition: 'Add condition', addGroup: 'Add group', removeCondition: 'Remove condition', removeGroup: 'Remove group',
+	expand: 'Expand group', collapse: 'Collapse group', groupMatch: 'Match conditions', conditionType: 'Condition type', conditionOperator: 'Condition operator',
+	choose: 'Choose a value…', conditionValue: 'Condition value',
+	fields: { tag: 'Steam tag', category: 'Steam category', ownership: 'Ownership', installed: 'Installation status', library: 'Steam library', drive: 'Installation drive' },
+	personal: 'Personally owned', family: 'Shared through Steam Families', installed: 'Installed locally', uninstalled: 'Not installed locally',
+	emptyAll: 'No additional restriction. Add a condition to get started.', emptyAny: 'This group matches no games until a condition is added.',
+	conditionCount: (count: number) => `${count} ${count === 1 ? 'condition' : 'conditions'}`,
+	save: 'Save', cancel: 'Cancel', saving: 'Saving…', saved: 'Rules saved', unsaved: 'Unsaved changes',
+	loading: 'Loading rules…', missingAccount: 'Steam account information is unavailable. Rules have not been changed.',
+	unsupported: 'This collection has an unsupported rule format. Its saved rules have been preserved.',
+	bridge: 'The native calculation bridge is unavailable. You can save rules; restart Steam to load the integration.',
+	conflict: 'Saved rules changed elsewhere. Cancel this draft to load the latest version.',
+	invalid: 'Choose a value for every condition.', saveFailed: 'Rules could not be saved. Your draft is retained.',
+	livePreview: 'Live preview',
+	panelFailed: 'Advanced Filters is unavailable. Steam’s filters remain active.',
+};

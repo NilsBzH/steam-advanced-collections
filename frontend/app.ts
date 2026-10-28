@@ -2,6 +2,7 @@ import type { SteamEnvironment, SteamObject } from './diagnostics/runtime';
 import { RuleRepository } from './rules/repository';
 import { SteamMetadata, accountId } from './steam/metadata';
 import { MembershipBridge } from './steam/membership';
+import { NativePreview } from './steam/preview';
 
 export type ObserveAfter = (target: SteamObject, method: string, handler: (args: any[], result: any) => void) => () => void;
 export class AdvancedCollections {
@@ -22,6 +23,7 @@ export class AdvancedCollections {
 	private currentCollections: SteamObject[] = [];
 	private watched = new WeakMap<object, Set<string>>();
 	private unavailableEvents = new Set<string>();
+	private previews = new Map<object, NativePreview>();
 	constructor(readonly environment: SteamEnvironment, readonly repository: RuleRepository, private observe: ObserveAfter, private options: { readinessIntervalMs?: number } = {}) {
 		this.metadata = new SteamMetadata(environment);
 		this.membership = new MembershipBridge(environment, repository, this.metadata, log);
@@ -124,9 +126,22 @@ export class AdvancedCollections {
 		this.notify();
 	}
 	subscribe(callback: () => void): () => void { this.listeners.add(callback); return () => { this.listeners.delete(callback); }; }
+	openPreview(scope: object, collection: SteamObject, account: string, current: () => boolean, onActive: (active: boolean) => void): NativePreview {
+		// Navigation can mount the next editor before React disposes the previous one.
+		for (const preview of this.previews.values()) preview.dispose();
+		const preview: NativePreview = new NativePreview(this.membership, collection, account, () => this.active && current(), onActive, () => {
+			if (this.previews.get(scope) === preview) this.previews.delete(scope);
+		});
+		this.previews.set(scope, preview);
+		if (!this.active) preview.dispose(false);
+		return preview;
+	}
+	closePreview(scope: object): void { this.previews.get(scope)?.dispose(); }
 	private notify(): void { for (const callback of this.listeners) { try { callback(); } catch { /* Isolate render consumers. */ } } }
 	dispose(): void {
 		this.active = false;
+		for (const preview of this.previews.values()) preview.dispose(false);
+		this.previews.clear();
 		clearTimeout(this.pending); clearInterval(this.periodic); clearInterval(this.readinessPoll);
 		for (const dispose of this.disposers.reverse()) { try { dispose(); } catch { /* Another plugin may have replaced the method. */ } }
 		this.repository.dispose();
