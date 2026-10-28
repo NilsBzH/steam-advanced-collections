@@ -55,3 +55,10 @@ test('legacy root conditions and repeated negations retain their three-valued me
 	}
 	expect(editorRoot(condition).children).toEqual([condition]); expect(nested.child.type).toBe('not');
 });
+test('operator-only, period-only and upper-bound edits are dirty and Cancel restores the full condition', () => {
+	const saved = { version: 1, enabled: true, expression: { type: 'condition', field: 'playtime', comparison: 'between', value: 2, upper: 20, period: 'total' } };
+	const draft = new RuleDraft(() => saved, async () => { throw Error('must not write'); }, () => true);
+	for (const change of [{ comparison: 'gt' }, { upper: 30 }, { period: 'twoWeeks' }]) {
+		draft.change({ ...saved, expression: { ...saved.expression, ...change } }); expect(draft.dirty).toBe(true); draft.cancel(); expect(draft.value).toEqual(saved); expect(draft.dirty).toBe(false);
+	}
+});

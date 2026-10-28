@@ -4,6 +4,7 @@ import { describeRule, editableFields, editorRoot, invertRule, newCondition, typ
 import type { Catalog, Choice } from '../steam/metadata';
 import { steamFeatureChoices } from '../steam/features';
 import { text } from './text';
+import { MeasurementEditor } from './MeasurementEditor';
 
 function Choices({ choices, value, onChange }: { choices: Choice[]; value: string; onChange: (value: string) => void }) {
 	return <select className="sac-value" aria-label={text.conditionValue} value={value} onChange={(event) => onChange(event.currentTarget.value)}>
@@ -26,6 +27,8 @@ function ConditionEditor({ rule, catalog, onChange }: { rule: Condition; catalog
 			return <Choices choices={[{ value: 'true', label: text.installed }, { value: 'false', label: text.uninstalled }]} value={String(rule.value)} onChange={(value) => onChange({ ...rule, value: value === 'true' })} />;
 		case 'library': case 'drive':
 			return <Choices choices={rule.field === 'library' ? catalog.libraries : catalog.drives} value={rule.value} onChange={(value) => onChange({ ...rule, value })} />;
+		case 'playtime': case 'lastPlayed': case 'installSize': case 'releaseDate':
+			return <MeasurementEditor rule={rule} onChange={onChange} />;
 	}
 }
 function Remove({ group, onRemove }: { group?: boolean; onRemove?: () => void }) {
@@ -36,6 +39,7 @@ function RuleNode({ rule, catalog, onChange, onRemove }: { rule: Rule; catalog: 
 	const [collapsed, setCollapsed] = useState(false);
 	const { node, inverted } = describeRule(rule);
 	const change = (next: Rule) => onChange(invertRule(next, inverted));
+	const measurement = node.type === 'condition' && (node.field === 'playtime' || node.field === 'lastPlayed' || node.field === 'installSize' || node.field === 'releaseDate');
 	if (node.type === 'condition') return <div className="sac-condition">
 		<select className="sac-field" aria-label={text.conditionType} value={node.field} onChange={(event) => {
 			const field = event.currentTarget.value as EditableField;
@@ -44,11 +48,13 @@ function RuleNode({ rule, catalog, onChange, onRemove }: { rule: Rule; catalog: 
 			{editableFields.map((field) => <option key={field} value={field}>{text.fields[field]}</option>)}
 			{node.field === 'drive' && <option value="drive" disabled>{text.fields.drive}</option>}
 		</select>
-		<select className="sac-operator" aria-label={text.conditionOperator} value={inverted ? 'not' : 'is'} onChange={(event) => onChange(invertRule(node, event.currentTarget.value === 'not'))}>
+		{!measurement && <select className="sac-operator" aria-label={text.conditionOperator} value={inverted ? 'not' : 'is'} onChange={(event) => onChange(invertRule(node, event.currentTarget.value === 'not'))}>
 			<option value="is">{text.is}</option><option value="not">{text.isNot}</option>
-		</select>
+		</select>}
 		<ConditionEditor rule={node} catalog={catalog} onChange={change} />
+		{measurement && <label className="sac-invert"><input type="checkbox" checked={inverted} onChange={(event) => onChange(invertRule(node, event.currentTarget.checked))} />{text.exclude}</label>}
 		<Remove onRemove={onRemove} />
+		{measurement && <span className="sac-measure-hint">{text.measurementHints[node.field as keyof typeof text.measurementHints]}</span>}
 	</div>;
 	return <div className={`sac-group${inverted ? ' sac-inverted' : ''}`}>
 		<div className="sac-group-heading">

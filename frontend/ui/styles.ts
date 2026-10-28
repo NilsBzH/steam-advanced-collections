@@ -8,7 +8,7 @@ export const css = `
 .sac-enable{font-size:12px;color:#bbcbd8;margin-left:auto}.sac-intro{max-width:80ch}
 .sac-live-preview{font-size:11px;color:#9bcca9;display:inline-flex;align-items:center;gap:5px}
 .sac-live-preview:before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
-.sac-advanced-filters button,.sac-advanced-filters select{font:inherit;background:#293f52;color:#e5edf4;border:1px solid #486079;border-radius:3px;min-height:32px;padding:5px 9px;max-width:100%}
+.sac-advanced-filters button,.sac-advanced-filters select,.sac-advanced-filters input[type=number]{font:inherit;background:#293f52;color:#e5edf4;border:1px solid #486079;border-radius:3px;min-height:32px;padding:5px 9px;max-width:100%}
 .sac-advanced-filters select{width:auto;min-width:0;text-overflow:ellipsis;cursor:pointer}
 .sac-advanced-filters button{cursor:pointer;flex:none;white-space:nowrap}
 .sac-advanced-filters button:hover:not(:disabled){background:#39566e;border-color:#66a2c6}
@@ -24,6 +24,7 @@ export const css = `
 .sac-advanced-filters .sac-remove:hover:not(:disabled){color:#ffc4b8;background:#613b3b;border-color:transparent}
 .sac-children{margin:10px 0 8px 8px;padding-left:10px;border-left:1px solid #425970;min-width:0}
 .sac-condition{padding:6px 0}.sac-field{max-width:190px}.sac-operator{max-width:100px}.sac-value{max-width:330px}
+.sac-number{width:108px;min-width:60px}.sac-measure-operator{max-width:150px}.sac-measure-hint{flex-basis:100%;font-size:11px;color:#9eafbe;line-height:1.5}
 .sac-group-actions{padding-top:5px}.sac-advanced-filters .sac-group-actions button{background:transparent;border-color:transparent;color:#82b9dc;font-size:12px;padding:4px 7px}
 .sac-group-summary,.sac-hint{font-size:12px;color:#9eafbe;line-height:1.5}.sac-group-summary{padding-left:34px}.sac-empty{padding:4px}
 .sac-warning{color:#ebc38c;font-size:12px}

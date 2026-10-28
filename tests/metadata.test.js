@@ -63,3 +63,27 @@ test('late folder requests cannot replace a newer snapshot or revive a disposed 
 	await f.metadata.refresh(); resolve([{ strFolderPath: 'D:/Games', vecApps: [{ nAppID: 10 }] }]); await older;
 	expect(f.metadata.facts({ appid: 10, local_per_client_data: { installed: true } }).drive).toBe('e:'); f.metadata.dispose();
 });
+test('playtime and last session distinguish reported zero, never played and unavailable history', () => {
+	const f = fixture();
+	expect(f.metadata.facts({ minutes_playtime_forever: 0, minutes_playtime_last_two_weeks: 0, rt_last_time_played: 0 })).toMatchObject({ playtimeMinutes: 0, playtimeRecentMinutes: 0, lastPlayed: null });
+	expect(f.metadata.facts({ minutes_playtime_forever: 123, minutes_playtime_last_two_weeks: 30, rt_last_time_played: 1700000000 })).toMatchObject({ playtimeMinutes: 123, playtimeRecentMinutes: 30, lastPlayed: 1700000000000 });
+	for (const app of [{}, { minutes_playtime_forever: 20, rt_last_time_played: 0 }, { minutes_playtime_forever: 0 }, { rt_last_time_played: 100 }]) expect(f.metadata.facts(app).lastPlayed).toBeUndefined();
+	for (const value of [null, -1, NaN, '20']) expect(f.metadata.facts({ minutes_playtime_forever: value }).playtimeMinutes).toBeUndefined();
+});
+test('installed size uses mounted local storage usage, never remote or overview download estimates', async () => {
+	const f = fixture(); const app = { appid: 10, size_on_disk: '99999999999', local_per_client_data: { installed: true } };
+	f.folders([{ strFolderPath: 'D:/SteamLibrary', vecApps: [{ nAppID: 10, nUsedSize: '2147483648' }] }]); await f.metadata.refresh();
+	expect(f.metadata.facts(app).installSizeBytes).toBe(2147483648);
+	expect(f.metadata.facts({ ...app, local_per_client_data: { installed: false }, most_available_per_client_data: { installed: true } }).installSizeBytes).toBeUndefined();
+	for (const value of [undefined, -1, 'bad', '12.5', '9007199254740993']) {
+		f.folders([{ strFolderPath: 'D:/SteamLibrary', vecApps: [{ nAppID: 10, nUsedSize: value }] }]); await f.metadata.refresh(); expect(f.metadata.facts(app).installSizeBytes).toBeUndefined();
+	}
+	f.folders([{ strFolderPath: 'E:/Games', vecApps: [{ nAppID: 10, nUsedSize: 0 }] }]); await f.metadata.refresh(); expect(f.metadata.facts(app).installSizeBytes).toBe(0);
+	f.folders([{ strFolderPath: 'E:/Games', bIsMounted: false, vecApps: [{ nAppID: 10, nUsedSize: 100 }] }]); await f.metadata.refresh(); expect(f.metadata.facts(app).installSizeBytes).toBeUndefined(); f.metadata.dispose();
+});
+test('release year follows the native original-then-Steam date priority without a network request', () => {
+	const f = fixture(), timestamp = (value) => Date.parse(value) / 1000;
+	expect(f.metadata.facts({ rt_original_release_date: timestamp('2010-01-01T00:00:00Z'), rt_steam_release_date: timestamp('2020-01-01T00:00:00Z') }).releaseYear).toBe(2010);
+	expect(f.metadata.facts({ rt_original_release_date: 0, rt_steam_release_date: timestamp('2020-01-01T00:00:00Z') }).releaseYear).toBe(2020);
+	for (const app of [{}, { rt_original_release_date: 0, rt_steam_release_date: 0 }, { rt_original_release_date: -1 }, { rt_original_release_date: 'bad' }]) expect(f.metadata.facts(app).releaseYear).toBeUndefined();
+});

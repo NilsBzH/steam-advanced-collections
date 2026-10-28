@@ -1,16 +1,38 @@
-# Steam Advanced Collections 0.3.2
+# Steam Advanced Collections 0.4.0
 
 An extension of Steam's native dynamic collections for Millennium. The **Advanced Filters** panel appears only when the native dynamic collection editor is open. No separate collection management interface is introduced, and static collections are left untouched.
 
 ## Features and Behavior
 
 - Filter games by Steam tags, **Steam Features**, personal ownership or Steam Families, local installation status, and Steam library folder.
+- Filter by **Playtime**, **Last Played**, **Install Size**, and **Release Date**, with numeric comparisons and inclusive ranges.
 - Build collapsible, nested groups using **All conditions must match** or **At least one condition must match**. Use **Is / Is not** on conditions and **Invert group** to exclude a whole group. Add and remove conditions and groups where they belong, without technical wrapper controls.
 - The Steam-inspired panel uses compact selectors, distinct group borders and responsive rows. UI copy is centralized in `frontend/ui/text.ts` for future localization; this version is English only.
 - Draft changes temporarily update the open collection's native Steam cover grid. **Save** persists the rules through Millennium's verified configuration path. **Cancel**, closing the editor, or switching collections discards the temporary override and restores saved rules immediately.
 - Advanced filters are combined with Steam's native filter predicate using AND. Steam's manual additions and exclusions retain their native priority.
 - Rules are stored separately for each Steam account and opaque collection ID, using `rules.v1:*` configuration keys. No internal Steam configuration files are modified directly.
 - Steam events trigger deferred recalculation. An installation check every 30 seconds handles potentially missed notifications.
+
+## Playtime, Last Played, Install Size and Release Date — 0.4.0
+
+| Criterion | Operators and input | Client data used |
+| --- | --- | --- |
+| **Playtime** | Greater than, Less than, Equal to, Between; decimal hours. Select Total or Last two weeks. | App overview `minutes_playtime_forever` and `minutes_playtime_last_two_weeks`. |
+| **Last Played** | More than, Less than, Between; whole Days, Months or Years ago. | App overview `rt_last_time_played`, with total minutes to distinguish Steam's never-played state. |
+| **Install Size** | Greater than, Less than, Equal to, Between; decimal MB or GB. | Local `SteamClient.InstallFolder.GetInstallFolders()` entries: mounted folder, `vecApps[].nAppID`, and `nUsedSize`, gated by `local_per_client_data.installed`. |
+| **Release Date** | Before, After, Between; years 1–9999. | App overview `rt_original_release_date`, falling back to `rt_steam_release_date`, as in Steam's `GetCanonicalReleaseDate()`. |
+
+All four criteria support nested groups, Exclude/NOT, native AND filtering, manual exceptions, live cover-grid preview, Save/Cancel and the existing verified per-account persistence. Existing rules and their `rules.v1:*` keys are unchanged. Save verification and draft conflict detection include the comparison, upper bound, unit and playtime period. Empty, negative, non-finite, reversed or otherwise invalid inputs cannot be saved or previewed; no invalid value is silently changed to zero.
+
+**Comparison boundaries:** Greater/More than, Less than, Before and After are strict. Between includes both endpoints. Equality compares the actual reported quantity without rounding. Steam reports whole playtime minutes; a decimal hour threshold does not add sub-minute precision. MB and GB use 1024² and 1024³ bytes, matching Steam's library size grouping.
+
+**Calendar rules:** Last Played subtracts UTC calendar periods from the current evaluation time. Month/year subtraction clamps the day at the end of the target month (March 31 minus one month is February 28/29; February 29 minus one year is February 28). UTC avoids daylight-saving ambiguities. Release Date compares the UTC year of the supplied canonical release timestamp; it does not invent a release date or substitute an installation/purchase date.
+
+**Unknown data:** A reported zero playtime is valid; a missing counter is unknown. Only an explicit last-played timestamp of zero together with zero total minutes is treated as Steam's never-played state. Never-played games do not match a last-session interval; applying Exclude includes that known state. Missing, contradictory or unusable history stays unknown, including under NOT. Positive last-session timestamps in the future are treated as unknown. As with earlier versions, an unknown advanced result retains the existing native Steam fallback.
+
+Install Size means the usage Steam reports in its local storage manager, including the associated components counted by that manager; no filesystem scan or download-size estimate is used. Uninstalled games, Remote Play-only installations, unavailable storage data, disconnected libraries and invalid/lossy size counters have **unknown** installed size, never an assumed zero. Combine this criterion with **Installation status Is Installed locally** if uninstalled games should be excluded explicitly. A locally installed game with an explicitly reported zero-byte usage remains a real zero.
+
+**Updates and limitations:** These fields and units were checked against the installed client's `steamui/sp.js` app-overview schema, canonical-date methods and storage-manager usage. No external API, Store request, per-game backend call or new dependency is introduced. The adapter reads the metadata Steam has already loaded; missing metadata and offline/stale client statistics remain limitations. Playtime precision and original-release-date availability depend on Steam. Installation changes and moves refresh the existing folder snapshot; the existing 30-second fallback also re-evaluates relative dates without Steam events. There is no new preview refresh loop.
 
 ## Steam Features and Legacy Drive Rules — 0.3.2
 
@@ -120,6 +142,6 @@ Functional log messages begin with `[SAC]`, while preserved diagnostic messages 
 
 `membership.hook observed` confirms that the native membership bridge was executed.
 
-Automated tests cover the rule engine, compiled persistence adapter, startup restoration, metadata, editor targeting, transformations against actual Steam client code, and simulated native membership calculations. They also cover compiled JSX interactions, Save/Cancel conflicts, temporary native membership, closing and switching editors, exact account/object isolation, no draft persistence, plugin unload/restart, missing APIs, manual exceptions, unknown metadata, debounce cancellation and the absence of recalculation loops. Feature-label tests verify official source associations, alphabetical sorting, unknown and saved-but-unlisted IDs, numeric category compatibility, and continued support for legacy drive rules without exposing them as new criteria.
+Automated tests cover the rule engine, compiled persistence adapter, startup restoration, metadata, editor targeting, transformations against actual Steam client code, and simulated native membership calculations. They also cover compiled JSX interactions, Save/Cancel conflicts, temporary native membership, closing and switching editors, exact account/object isolation, no draft persistence, plugin unload/restart, missing APIs, manual exceptions, unknown metadata, debounce cancellation and the absence of recalculation loops. Feature-label tests verify official source associations, alphabetical sorting, unknown and saved-but-unlisted IDs, numeric category compatibility, and continued support for legacy drive rules without exposing them as new criteria. Measurement tests cover strict and inclusive operators, exact zeros, hour/byte conversions, two-week counters, missing/uninstalled data, UTC month-end/leap-year boundaries, the evaluation clock, periodic re-evaluation without events, numeric editor controls, and verified restoration of all new condition properties.
 
 Activating and persisting rules on actual user collections remains an explicit manual verification step.

@@ -1,12 +1,11 @@
-import { isSavedRules, type SavedRules } from './model';
+import { isSavedRules, ruleFingerprint, type SavedRules } from './model';
 
 export const PLUGIN_ID = 'com.steamadvancedcollections.plugin';
 const prefix = 'rules.v1:';
-const ruleProperties = ['version', 'enabled', 'expression', 'type', 'operator', 'children', 'child', 'field', 'value'];
 
 /** Compare rule semantics regardless of the JSON object key order used by Millennium. */
 function sameRules(left: SavedRules, right: unknown): right is SavedRules {
-	return isSavedRules(right) && JSON.stringify(left, ruleProperties) === JSON.stringify(right, ruleProperties);
+	return isSavedRules(right) && ruleFingerprint(left) === ruleFingerprint(right);
 }
 export interface ConfigPort {
 	getAll(): Promise<Record<string, unknown>>;

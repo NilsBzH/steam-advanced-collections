@@ -19,10 +19,19 @@ function numbers(value: unknown): ReadonlySet<number> | undefined {
 	return undefined;
 }
 
+function nonnegativeInteger(value: unknown): number | undefined {
+	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+/** Native disk counters may be numbers or uint64 decimal strings. Reject lossy values. */
+function byteCount(value: unknown): number | undefined {
+	if (typeof value === 'string' && /^\d+$/.test(value)) return nonnegativeInteger(Number(value));
+	return nonnegativeInteger(value);
+}
+
 /** Resolve only local installation data. Remote Play installations never count as local. */
 export class SteamMetadata {
 	private folders: SteamObject[] = [];
-	private locations = new Map<number, { library: string; drive?: string; mounted: boolean }>();
+	private locations = new Map<number, { library: string; drive?: string; mounted: boolean; sizeBytes?: number }>();
 	private requestId = 0;
 	private disposed = false;
 	private cachedCatalog?: Catalog;
@@ -40,12 +49,12 @@ export class SteamMetadata {
 			]);
 			if (!Array.isArray(folders)) throw Error('Unexpected installation metadata');
 			if (this.disposed || id !== this.requestId) return;
-			const locations = new Map<number, { library: string; drive?: string; mounted: boolean }>();
+			const locations = new Map<number, { library: string; drive?: string; mounted: boolean; sizeBytes?: number }>();
 			for (const folder of folders) {
 				if (typeof folder.strFolderPath !== 'string' || !Array.isArray(folder.vecApps)) continue;
 				const library = normalizeLocation(folder.strFolderPath);
 				const drive = /^[a-z]:/i.exec(library)?.[0];
-				for (const app of folder.vecApps) if (Number.isSafeInteger(app.nAppID)) locations.set(app.nAppID, { library, drive, mounted: folder.bIsMounted !== false });
+				for (const app of folder.vecApps) if (Number.isSafeInteger(app.nAppID)) locations.set(app.nAppID, { library, drive, mounted: folder.bIsMounted !== false, sizeBytes: byteCount(app.nUsedSize) });
 			}
 			this.folders = folders;
 			this.locations = locations;
@@ -59,6 +68,25 @@ export class SteamMetadata {
 		const facts: GameFacts = {};
 		try { facts.tags = numbers(typeof app.GetStoreTags === 'function' ? app.GetStoreTags() : app.store_tag); } catch { /* unavailable */ }
 		try { facts.categories = numbers(app.store_category); } catch { /* unavailable */ }
+		try { facts.playtimeMinutes = nonnegativeInteger(app.minutes_playtime_forever); } catch { /* unavailable */ }
+		try { facts.playtimeRecentMinutes = nonnegativeInteger(app.minutes_playtime_last_two_weeks); } catch { /* unavailable */ }
+		try {
+			const last = nonnegativeInteger(app.rt_last_time_played);
+			// Steam's GetLastTimePlayed rejects early-epoch sentinels. Zero only
+			// means never played when the client also reports zero total minutes.
+			if (last !== undefined && last >= 31536000) facts.lastPlayed = last * 1000;
+			else if (last === 0 && facts.playtimeMinutes === 0) facts.lastPlayed = null;
+		} catch { /* Unknown history is not a never-played game. */ }
+		try {
+			// Same priority as Steam's GetCanonicalReleaseDate: original, then Steam.
+			const original = nonnegativeInteger(app.rt_original_release_date);
+			const steam = nonnegativeInteger(app.rt_steam_release_date);
+			const seconds = original && original > 0 ? original : steam;
+			if (seconds && seconds > 0) {
+				const year = new Date(seconds * 1000).getUTCFullYear();
+				if (Number.isInteger(year) && year >= 1 && year <= 9999) facts.releaseYear = year;
+			}
+		} catch { /* No Store request and no inferred release year. */ }
 		try {
 			if (typeof app.BIsOwned === 'function' && typeof app.BIsBorrowed === 'function') {
 				if (app.BIsOwned() && !app.BIsBorrowed()) facts.ownership = 'personal';
@@ -71,7 +99,7 @@ export class SteamMetadata {
 			if (facts.installed === false) { facts.library = null; facts.drive = null; }
 			else if (facts.installed === true) {
 				const location = this.locations.get(app.appid);
-				if (location?.mounted) { facts.library = location.library; facts.drive = location.drive; }
+				if (location?.mounted) { facts.library = location.library; facts.drive = location.drive; facts.installSizeBytes = location.sizeBytes; }
 			}
 		} catch { /* A detached drive has unknown current installation metadata. */ }
 		return facts;

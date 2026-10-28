@@ -21,7 +21,7 @@ function fixture() {
 	const app = new AdvancedCollections(environment, repository, () => () => {}, { readinessIntervalMs: 5 });
 	window.PLUGIN_LIST[PLUGIN_ID] = { integration: app.membership };
 	const create = (isStatic = false) => new Class({ bIsEmpty: false, Matches: () => true }, games, isStatic);
-	return { app, port, repository, environment, disk, create, login: () => { currentAccount = account; environment.appStore.m_bIsInitialized = true; } };
+	return { app, port, repository, environment, disk, create, window, login: () => { currentAccount = account; environment.appStore.m_bIsInitialized = true; } };
 }
 test('cold startup restores persisted rules without opening an editor, even with late account and collections', async () => {
 	const f = fixture(); const before = structuredClone(f.disk);
@@ -56,4 +56,19 @@ test('a different Steam account never restores another account rules', async () 
 	const collection = f.create(); f.environment.collectionStore.collectionsFromStorage.set('test', collection);
 	try { await f.app.start(); expect(f.app.ready).toBe(true); expect(collection.calls).toBe(0); }
 	finally { f.app.dispose(); }
+});
+test('the periodic fallback re-evaluates relative dates without any Steam event', async () => {
+	const f = fixture(); f.login(); const now = Date.now, base = Date.parse('2026-01-15T12:00:00Z'); let clock = base;
+	f.disk[ruleKey(account, 'test')] = { version: 1, enabled: true, expression: { type: 'condition', field: 'lastPlayed', comparison: 'gt', value: 30, unit: 'days' } };
+	for (const game of f.environment.appStore.allApps) { game.rt_last_time_played = Date.parse('2026-01-01T12:00:00Z') / 1000; game.minutes_playtime_forever = 120; }
+	const collection = f.create(); f.environment.collectionStore.collectionsFromStorage.set('test', collection);
+	const app = new AdvancedCollections(f.environment, f.repository, () => () => {}, { periodicIntervalMs: 20 });
+	f.window.PLUGIN_LIST[PLUGIN_ID] = { integration: app.membership };
+	// Replace only Date.now; timer scheduling still uses the real clock.
+	Date.now = () => clock;
+	try {
+		await app.start(); expect([...collection.m_setApps]).toEqual([]);
+		clock = Date.parse('2026-03-15T12:00:00Z'); await Bun.sleep(220);
+		expect([...collection.m_setApps].sort()).toEqual([1, 2]);
+	} finally { app.dispose(); f.app.dispose(); Date.now = now; }
 });

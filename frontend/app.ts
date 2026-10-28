@@ -24,7 +24,7 @@ export class AdvancedCollections {
 	private watched = new WeakMap<object, Set<string>>();
 	private unavailableEvents = new Set<string>();
 	private previews = new Map<object, NativePreview>();
-	constructor(readonly environment: SteamEnvironment, readonly repository: RuleRepository, private observe: ObserveAfter, private options: { readinessIntervalMs?: number } = {}) {
+	constructor(readonly environment: SteamEnvironment, readonly repository: RuleRepository, private observe: ObserveAfter, private options: { readinessIntervalMs?: number; periodicIntervalMs?: number } = {}) {
 		this.metadata = new SteamMetadata(environment);
 		this.membership = new MembershipBridge(environment, repository, this.metadata, log);
 	}
@@ -35,7 +35,8 @@ export class AdvancedCollections {
 		// Account IDs and collection objects can arrive after the initial library
 		// event. Keep watching readiness; never require opening the editor to restore.
 		this.readinessPoll = setInterval(() => { void this.ensureReady(); }, this.options.readinessIntervalMs ?? 1000);
-		this.periodic = setInterval(() => this.schedule(true), 30000);
+		// Also re-evaluate relative dates as wall-clock time advances, without Steam events.
+		this.periodic = setInterval(() => this.schedule(true), this.options.periodicIntervalMs ?? 30000);
 		await this.ensureReady();
 	}
 	private steamSnapshot(): { account: string; collections: SteamObject[] } | undefined {

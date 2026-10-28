@@ -1,7 +1,7 @@
 [plugin]
 id = "com.steamadvancedcollections.plugin"
 name = "Steam Advanced Collections"
-version = "0.3.2"
+version = "0.4.0"
 author = "NilsBzH"
 description = "Advanced filtering and exclusion rules for Steam collections."
 

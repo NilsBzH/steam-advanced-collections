@@ -1,9 +1,8 @@
-import { emptyRules, isSavedRules, type SavedRules } from './model';
+import { emptyRules, isSavedRules, ruleFingerprint as fingerprint, type SavedRules } from './model';
 
 const copy = (value: SavedRules): SavedRules => JSON.parse(JSON.stringify(value));
 // Millennium may reorder JSON object keys. Draft conflict checks compare rule
 // content, not the serializer's property order (the 0.2.1 repository does too).
-const fingerprint = (value: SavedRules): string => JSON.stringify(value, ['version', 'enabled', 'expression', 'type', 'operator', 'children', 'child', 'field', 'value']);
 
 /** An editor owns a detached draft. Only save() can cross the persistence boundary. */
 export class RuleDraft {

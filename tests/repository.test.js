@@ -66,3 +66,15 @@ test('disposing during configuration loading cannot restore or notify afterwards
 	resolve({ [ruleKey('account', 'one')]: value }); await loading;
 	expect(f.repository.isLoaded()).toBe(false); expect(notifications).toBe(0);
 });
+test('save verification detects altered comparison, upper bound, period or unit', async () => {
+	for (const [expression, changed] of [
+		[{ type: 'condition', field: 'playtime', comparison: 'between', value: 2, upper: 20, period: 'total' }, { comparison: 'gt' }],
+		[{ type: 'condition', field: 'playtime', comparison: 'between', value: 2, upper: 20, period: 'total' }, { upper: 30 }],
+		[{ type: 'condition', field: 'playtime', comparison: 'between', value: 2, upper: 20, period: 'total' }, { period: 'twoWeeks' }],
+		[{ type: 'condition', field: 'installSize', comparison: 'eq', value: 20, unit: 'GB' }, { unit: 'MB' }],
+	]) {
+		const f = fixture(); await f.repository.load();
+		f.port.set = async (key, rule) => { f.disk[key] = { ...rule, expression: { ...rule.expression, ...changed } }; };
+		await expect(f.repository.save('account', 'one', { version: 1, enabled: true, expression })).rejects.toThrow('could not be verified'); f.repository.dispose();
+	}
+});

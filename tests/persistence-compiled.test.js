@@ -12,6 +12,12 @@ test('compiled Millennium configuration adapter persists rules across a cold rel
 	const plugin = 'com.sac.persistence-regression';
 	const account = '76561198111189155', collection = 'uc-fztprRujSoR1';
 	const rules = { version: 1, enabled: true, expression: { type: 'group', operator: 'and', children: [{ type: 'condition', field: 'tag', value: 10 }, { type: 'not', child: { type: 'condition', field: 'ownership', value: 'family' } }] } };
+	rules.expression.children.push(
+		{ type: 'condition', field: 'playtime', comparison: 'between', value: 2.5, upper: 20, period: 'twoWeeks' },
+		{ type: 'condition', field: 'lastPlayed', comparison: 'gt', value: 6, unit: 'months' },
+		{ type: 'condition', field: 'installSize', comparison: 'between', value: 5, upper: 20, unit: 'GB' },
+		{ type: 'condition', field: 'releaseDate', comparison: 'between', value: 2000, upper: 2010 },
+	);
 	const diskPath = join(directory, 'millennium-config.json');
 	let first, restored;
 	try {

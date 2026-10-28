@@ -71,5 +71,21 @@ test('compiled editor supports readable operators, nesting, collapsing and remov
 		expect(JSON.stringify(rule)).toBe(driveSnapshot); expect(edits).toBe(driveEdits);
 		legacy.props.onChange({ currentTarget: { value: 'library' } }); expect(rule.children[0].field).toBe('library');
 		expect(find((node) => node.type === 'option' && node.props.value === 'drive')).toBeUndefined();
+		// The compiled number/range editor keeps real zero and incomplete values distinct.
+		find((node) => node.props?.['aria-label'] === 'Condition type').props.onChange({ currentTarget: { value: 'playtime' } });
+		expect(rule.children[0]).toMatchObject({ field: 'playtime', value: null, comparison: 'gt', period: 'total' });
+		find((node) => node.type === 'input' && node.props['aria-label'] === 'Condition value').props.onChange({ currentTarget: { valueAsNumber: 0 } });
+		expect(rule.children[0].value).toBe(0);
+		find((node) => node.props?.['aria-label'] === 'Condition operator').props.onChange({ currentTarget: { value: 'between' } });
+		expect(find((node) => node.props?.['aria-label'] === 'Upper value').props.value).toBe('');
+		find((node) => node.props?.['aria-label'] === 'Upper value').props.onChange({ currentTarget: { valueAsNumber: 20.5 } });
+		find((node) => node.props?.['aria-label'] === 'Playtime period').props.onChange({ currentTarget: { value: 'twoWeeks' } });
+		expect(rule.children[0]).toMatchObject({ value: 0, upper: 20.5, period: 'twoWeeks' });
+		find((node) => node.type === 'input' && node.props['aria-label'] === 'Condition value').props.onChange({ currentTarget: { valueAsNumber: NaN } });
+		expect(rule.children[0].value).toBeNull();
+		for (const [field, control] of [['lastPlayed', 'Time unit'], ['installSize', 'Size unit'], ['releaseDate', 'Condition value']]) {
+			find((node) => node.props?.['aria-label'] === 'Condition type').props.onChange({ currentTarget: { value: field } });
+			expect(rule.children[0].field).toBe(field); expect(find((node) => node.props?.['aria-label'] === control)).toBeDefined();
+		}
 	} finally { rmSync(directory, { recursive: true, force: true }); }
 }, 20000);

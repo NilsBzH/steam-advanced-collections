@@ -157,3 +157,24 @@ test('plugin unload and a fresh runtime restore only saved rules; no draft survi
 		expect(reloaded.get(account, 'test')).toEqual(saved()); expect(f.writes()).toBe(0); reloaded.dispose();
 	} finally { f.dispose(); }
 });
+test('all four measurement criteria work together through native live preview and Cancel', async () => {
+	const f = await fixture();
+	try {
+		for (const game of f.games) {
+			game.minutes_playtime_forever = game.appid === 2 ? 120 : 0;
+			game.rt_last_time_played = Date.parse('2020-01-01T00:00:00Z') / 1000;
+			game.rt_original_release_date = Date.parse('2000-01-01T00:00:00Z') / 1000;
+			game.local_per_client_data = { installed: true };
+		}
+		f.app.environment.SteamClient = { InstallFolder: { GetInstallFolders: async () => [{ strFolderPath: 'D:/Games', vecApps: f.games.map((game) => ({ nAppID: game.appid, nUsedSize: 2 * 1024 ** 3 })) }] } };
+		await f.app.metadata.refresh();
+		f.preview.update(saved({ type: 'group', operator: 'and', children: [
+			{ type: 'condition', field: 'playtime', comparison: 'gt', period: 'total', value: 1 },
+			{ type: 'condition', field: 'lastPlayed', comparison: 'gt', unit: 'months', value: 6 },
+			{ type: 'condition', field: 'installSize', comparison: 'gt', unit: 'GB', value: 1 },
+			{ type: 'condition', field: 'releaseDate', comparison: 'before', value: 2010 },
+		] }), true);
+		await Bun.sleep(15); expect(members(f.collection)).toEqual([2]);
+		f.preview.cancel(); expect(members(f.collection)).toEqual([1]); expect(f.writes()).toBe(0);
+	} finally { f.dispose(); }
+});

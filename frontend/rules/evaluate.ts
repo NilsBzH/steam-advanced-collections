@@ -1,13 +1,15 @@
 import { normalizeLocation, type Condition, type GameFacts, type Rule } from './model';
+import { evaluateMeasurement } from './measurements';
 
 /** undefined denotes unknown; in particular NOT(unknown) stays unknown. */
 export type Truth = boolean | undefined;
-function condition(rule: Condition, facts: GameFacts): Truth {
+function condition(rule: Condition, facts: GameFacts, now: number): Truth {
 	switch (rule.field) {
 		case 'tag': return facts.tags?.has(rule.value);
 		case 'category': return facts.categories?.has(rule.value);
 		case 'ownership': return facts.ownership === undefined ? undefined : facts.ownership === rule.value;
 		case 'installed': return facts.installed === undefined ? undefined : facts.installed === rule.value;
+		case 'playtime': case 'lastPlayed': case 'installSize': case 'releaseDate': return evaluateMeasurement(rule, facts, now);
 		case 'library': case 'drive': {
 			const value = facts[rule.field];
 			return value === undefined ? undefined : value !== null && normalizeLocation(value) === normalizeLocation(rule.value);
@@ -16,7 +18,7 @@ function condition(rule: Condition, facts: GameFacts): Truth {
 }
 
 /** Pure evaluator. Validated rules can have arbitrary nesting without recursive JS calls. */
-export function evaluate(rule: Rule, facts: GameFacts): Truth {
+export function evaluate(rule: Rule, facts: GameFacts, now = Date.now()): Truth {
 	const stack: Array<{ rule: Rule; visited: boolean }> = [{ rule, visited: false }];
 	const values = new Map<Rule, Truth>();
 	let nodes = 0;
@@ -24,7 +26,7 @@ export function evaluate(rule: Rule, facts: GameFacts): Truth {
 		if (++nodes > 20000) return undefined;
 		const frame = stack.pop()!;
 		const node = frame.rule;
-		if (node.type === 'condition') values.set(node, condition(node, facts));
+		if (node.type === 'condition') values.set(node, condition(node, facts, now));
 		else if (!frame.visited) {
 			stack.push({ rule: node, visited: true });
 			if (node.type === 'not') stack.push({ rule: node.child, visited: false });
