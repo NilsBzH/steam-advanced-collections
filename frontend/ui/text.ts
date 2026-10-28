@@ -7,7 +7,7 @@ export const text = {
 	addCondition: 'Add condition', addGroup: 'Add group', removeCondition: 'Remove condition', removeGroup: 'Remove group',
 	expand: 'Expand group', collapse: 'Collapse group', groupMatch: 'Match conditions', conditionType: 'Condition type', conditionOperator: 'Condition operator',
 	choose: 'Choose a value…', conditionValue: 'Condition value',
-	fields: { tag: 'Steam tag', category: 'Steam category', ownership: 'Ownership', installed: 'Installation status', library: 'Steam library', drive: 'Installation drive' },
+	fields: { tag: 'Steam tag', category: 'Steam Features', ownership: 'Ownership', installed: 'Installation status', library: 'Steam library', drive: 'Installation Drive (legacy)' },
 	personal: 'Personally owned', family: 'Shared through Steam Families', installed: 'Installed locally', uninstalled: 'Not installed locally',
 	emptyAll: 'No additional restriction. Add a condition to get started.', emptyAny: 'This group matches no games until a condition is added.',
 	conditionCount: (count: number) => `${count} ${count === 1 ? 'condition' : 'conditions'}`,

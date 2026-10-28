@@ -1,16 +1,24 @@
-# Steam Advanced Collections 0.3.1
+# Steam Advanced Collections 0.3.2
 
 An extension of Steam's native dynamic collections for Millennium. The **Advanced Filters** panel appears only when the native dynamic collection editor is open. No separate collection management interface is introduced, and static collections are left untouched.
 
 ## Features and Behavior
 
-- Filter games by Steam tags, categories, personal ownership or Steam Families, local installation status, Steam library folder, and Windows drive.
+- Filter games by Steam tags, **Steam Features**, personal ownership or Steam Families, local installation status, and Steam library folder.
 - Build collapsible, nested groups using **All conditions must match** or **At least one condition must match**. Use **Is / Is not** on conditions and **Invert group** to exclude a whole group. Add and remove conditions and groups where they belong, without technical wrapper controls.
 - The Steam-inspired panel uses compact selectors, distinct group borders and responsive rows. UI copy is centralized in `frontend/ui/text.ts` for future localization; this version is English only.
 - Draft changes temporarily update the open collection's native Steam cover grid. **Save** persists the rules through Millennium's verified configuration path. **Cancel**, closing the editor, or switching collections discards the temporary override and restores saved rules immediately.
 - Advanced filters are combined with Steam's native filter predicate using AND. Steam's manual additions and exclusions retain their native priority.
 - Rules are stored separately for each Steam account and opaque collection ID, using `rules.v1:*` configuration keys. No internal Steam configuration files are modified directly.
 - Steam events trigger deferred recalculation. An installation check every 30 seconds handles potentially missed notifications.
+
+## Steam Features and Legacy Drive Rules — 0.3.2
+
+**Steam Features** replaces the old **Steam category** label. Available features use verified official English names (for example, Single-player, Multi-player, Steam Cloud and Steam Achievements), sorted alphabetically. The catalog still uses the numeric `store_category` IDs internally, and saved `category` conditions need no migration. A saved selection absent from today's library catalog still displays its verified name. Unconfirmed IDs are labeled **Unknown Steam feature (ID: …)** rather than assigned a guessed meaning. Distinct IDs remain distinct even when Steam uses the same official label for them.
+
+The bundled mapping contains 63 verified ID/name associations, checked on **2026-10-29** against Steam's [English search filters](https://store.steampowered.com/search/?l=english) and official Store `appdetails` responses, including [Portal 2](https://store.steampowered.com/api/appdetails?appids=620&filters=categories&l=english) and [Dota 2](https://store.steampowered.com/api/appdetails?appids=570&filters=categories&l=english). API `categories[].description` is authoritative where available; remaining verified labels come from the search page's category/player/accessibility filters. Controller-search labels are not assumed to equal category labels (notably ID 18). Per-ID source evidence is recorded in [the test fixture](tests/fixtures/steam-features-2026-10-29.json). Names are bundled locally; the plugin makes no new Store network requests at runtime. Future or undocumented IDs keep the explicit fallback until verified.
+
+**Installation Drive** is no longer offered for new conditions. **Steam library** is the location criterion for new filters. Existing `drive` conditions continue to evaluate, preview, persist and restore unchanged. Their editor row remains visible as **Installation Drive (legacy)** and can be removed or manually converted to another criterion. Opening the editor never replaces or deletes an old rule automatically.
 
 ## Live Preview
 
@@ -87,7 +95,7 @@ A disconnected drive produces an unknown installation location.
 
 Physical Linux drives are not inferred from filesystem paths, although their Steam library folders remain available for filtering.
 
-Tag names are provided by Steam. Categories are currently displayed using their identifiers.
+Tag names are provided by Steam. Steam feature names use the verified bundled mapping described above; unconfirmed IDs have an explicit unknown label.
 
 Millennium imposes limits on the number and size of configuration values. Save errors are displayed without deleting existing rules to free storage space.
 
@@ -112,6 +120,6 @@ Functional log messages begin with `[SAC]`, while preserved diagnostic messages 
 
 `membership.hook observed` confirms that the native membership bridge was executed.
 
-Automated tests cover the rule engine, compiled persistence adapter, startup restoration, metadata, editor targeting, transformations against actual Steam client code, and simulated native membership calculations. They also cover compiled JSX interactions, Save/Cancel conflicts, temporary native membership, closing and switching editors, exact account/object isolation, no draft persistence, plugin unload/restart, missing APIs, manual exceptions, unknown metadata, debounce cancellation and the absence of recalculation loops.
+Automated tests cover the rule engine, compiled persistence adapter, startup restoration, metadata, editor targeting, transformations against actual Steam client code, and simulated native membership calculations. They also cover compiled JSX interactions, Save/Cancel conflicts, temporary native membership, closing and switching editors, exact account/object isolation, no draft persistence, plugin unload/restart, missing APIs, manual exceptions, unknown metadata, debounce cancellation and the absence of recalculation loops. Feature-label tests verify official source associations, alphabetical sorting, unknown and saved-but-unlisted IDs, numeric category compatibility, and continued support for legacy drive rules without exposing them as new criteria.
 
 Activating and persisting rules on actual user collections remains an explicit manual verification step.

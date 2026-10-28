@@ -51,5 +51,25 @@ test('compiled editor supports readable operators, nesting, collapsing and remov
 		find((node) => node.props?.['aria-label'] === 'Expand group').props.onClick();
 		expect(find((node) => node.props?.['aria-label'] === 'Condition type')).toBeDefined();
 		find((node) => node.props?.['aria-label'] === 'Remove group').props.onClick(); expect(rule.children.length).toBe(1);
+		// New criteria expose Steam Features but never offer a drive condition.
+		const criterion = find((node) => node.props?.['aria-label'] === 'Condition type');
+		expect(flatten(criterion).some((node) => node.type === 'option' && label(node) === 'Steam Features')).toBe(true);
+		expect(flatten(criterion).some((node) => node.type === 'option' && node.props.value === 'drive')).toBe(false);
+		// Saved categories absent from today's catalog must not fall back to a bare ID.
+		rule = { type: 'condition', field: 'category', value: 23 }; const categorySnapshot = JSON.stringify(rule), oldEdits = edits;
+		let values = find((node) => node.props?.['aria-label'] === 'Condition value');
+		expect(flatten(values).some((node) => node.type === 'option' && label(node) === 'Steam Cloud' && node.props.value === '23')).toBe(true);
+		expect(JSON.stringify(rule)).toBe(categorySnapshot); expect(edits).toBe(oldEdits);
+		values.props.onChange({ currentTarget: { value: '22' } }); expect(rule.children[0]).toEqual({ type: 'condition', field: 'category', value: 22 });
+		rule = { type: 'condition', field: 'category', value: 9999 };
+		values = find((node) => node.props?.['aria-label'] === 'Condition value');
+		expect(flatten(values).some((node) => node.type === 'option' && label(node) === 'Unknown Steam feature (ID: 9999)')).toBe(true);
+		// Legacy drive rows remain visible/editable without silently replacing them.
+		rule = { type: 'condition', field: 'drive', value: 'E:' }; const driveSnapshot = JSON.stringify(rule), driveEdits = edits;
+		const legacy = find((node) => node.props?.['aria-label'] === 'Condition type');
+		expect(flatten(legacy).some((node) => node.type === 'option' && node.props.value === 'drive' && node.props.disabled && label(node) === 'Installation Drive (legacy)')).toBe(true);
+		expect(JSON.stringify(rule)).toBe(driveSnapshot); expect(edits).toBe(driveEdits);
+		legacy.props.onChange({ currentTarget: { value: 'library' } }); expect(rule.children[0].field).toBe('library');
+		expect(find((node) => node.type === 'option' && node.props.value === 'drive')).toBeUndefined();
 	} finally { rmSync(directory, { recursive: true, force: true }); }
 }, 20000);

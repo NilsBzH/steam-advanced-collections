@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import type { Condition, Field, Rule } from '../rules/model';
-import { describeRule, editorRoot, invertRule, newCondition } from '../rules/editing';
+import type { Condition, Rule } from '../rules/model';
+import { describeRule, editableFields, editorRoot, invertRule, newCondition, type EditableField } from '../rules/editing';
 import type { Catalog, Choice } from '../steam/metadata';
+import { steamFeatureChoices } from '../steam/features';
 import { text } from './text';
 
 function Choices({ choices, value, onChange }: { choices: Choice[]; value: string; onChange: (value: string) => void }) {
@@ -13,8 +14,12 @@ function Choices({ choices, value, onChange }: { choices: Choice[]; value: strin
 }
 function ConditionEditor({ rule, catalog, onChange }: { rule: Condition; catalog: Catalog; onChange: (rule: Condition) => void }) {
 	switch (rule.field) {
-		case 'tag': case 'category':
-			return <Choices choices={rule.field === 'tag' ? catalog.tags : catalog.categories} value={rule.value ? String(rule.value) : ''} onChange={(value) => onChange({ ...rule, value: Number(value) })} />;
+		case 'tag':
+			return <Choices choices={catalog.tags} value={rule.value ? String(rule.value) : ''} onChange={(value) => onChange({ ...rule, value: Number(value) })} />;
+		case 'category':
+			// A saved feature absent from the current library still gets a verified
+			// label (or explicit unknown fallback), in the same alphabetical list.
+			return <Choices choices={steamFeatureChoices([...catalog.categories.map((choice) => Number(choice.value)), rule.value])} value={rule.value ? String(rule.value) : ''} onChange={(value) => onChange({ ...rule, value: Number(value) })} />;
 		case 'ownership':
 			return <Choices choices={[{ value: 'personal', label: text.personal }, { value: 'family', label: text.family }]} value={rule.value} onChange={(value) => onChange({ ...rule, value: value as 'personal' | 'family' })} />;
 		case 'installed':
@@ -32,8 +37,12 @@ function RuleNode({ rule, catalog, onChange, onRemove }: { rule: Rule; catalog: 
 	const { node, inverted } = describeRule(rule);
 	const change = (next: Rule) => onChange(invertRule(next, inverted));
 	if (node.type === 'condition') return <div className="sac-condition">
-		<select className="sac-field" aria-label={text.conditionType} value={node.field} onChange={(event) => change(newCondition(event.currentTarget.value as Field))}>
-			{(Object.keys(text.fields) as Field[]).map((field) => <option key={field} value={field}>{text.fields[field]}</option>)}
+		<select className="sac-field" aria-label={text.conditionType} value={node.field} onChange={(event) => {
+			const field = event.currentTarget.value as EditableField;
+			if (editableFields.includes(field)) change(newCondition(field));
+		}}>
+			{editableFields.map((field) => <option key={field} value={field}>{text.fields[field]}</option>)}
+			{node.field === 'drive' && <option value="drive" disabled>{text.fields.drive}</option>}
 		</select>
 		<select className="sac-operator" aria-label={text.conditionOperator} value={inverted ? 'not' : 'is'} onChange={(event) => onChange(invertRule(node, event.currentTarget.value === 'not'))}>
 			<option value="is">{text.is}</option><option value="not">{text.isNot}</option>

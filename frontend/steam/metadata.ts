@@ -1,5 +1,6 @@
 import { normalizeLocation, type GameFacts } from '../rules/model';
 import type { SteamEnvironment, SteamObject } from '../diagnostics/runtime';
+import { steamFeatureChoices } from './features';
 
 export interface Choice { value: string; label: string }
 export interface Catalog { tags: Choice[]; categories: Choice[]; libraries: Choice[]; drives: Choice[] }
@@ -91,7 +92,7 @@ export class SteamMetadata {
 				try { label = this.environment.appStore?.GetLocalizationForStoreTag?.(id); } catch { /* ID is always usable. */ }
 				return { value: String(id), label: typeof label === 'string' && label ? label : `Tag #${id}` };
 			}).sort((a, b) => a.label.localeCompare(b.label)),
-			categories: Array.from(categories).sort((a, b) => a - b).map((id) => ({ value: String(id), label: `Steam category #${id}` })),
+			categories: steamFeatureChoices(categories),
 			libraries, drives,
 		};
 	}

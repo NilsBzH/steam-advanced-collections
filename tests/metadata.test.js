@@ -35,7 +35,19 @@ test('tags/categories and tag labels use local Steam metadata, including iterabl
 	f.environment.appStore.allApps = [app];
 	expect(f.metadata.facts(app).tags.has(10)).toBe(true);
 	expect(f.metadata.catalog().tags).toEqual([{ value: '10', label: 'Strategy' }]);
-	expect(f.metadata.catalog().categories).toEqual([{ value: '2', label: 'Steam category #2' }]);
+	expect(f.metadata.catalog().categories).toEqual([{ value: '2', label: 'Single-player' }]);
+});
+test('Steam features use official names sorted alphabetically while preserving distinct numeric IDs', () => {
+	const f = fixture();
+	f.environment.appStore.allApps = [{ store_category: [23, 9999, 22, 2, 1, 30, 51, 23] }];
+	expect(f.metadata.catalog().categories).toEqual([
+		{ value: '1', label: 'Multi-player' }, { value: '2', label: 'Single-player' },
+		{ value: '22', label: 'Steam Achievements' }, { value: '23', label: 'Steam Cloud' },
+		{ value: '30', label: 'Steam Workshop' }, { value: '51', label: 'Steam Workshop' },
+		{ value: '9999', label: 'Unknown Steam feature (ID: 9999)' },
+	]);
+	expect([...f.metadata.facts(f.environment.appStore.allApps[0]).categories]).toEqual([23, 9999, 22, 2, 1, 30, 51]);
+	f.metadata.dispose();
 });
 test('an unavailable folder refresh discards stale paths instead of silently using them', async () => {
 	const f = fixture(); await f.metadata.refresh();

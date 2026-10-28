@@ -1,11 +1,15 @@
 import type { Condition, Field, Rule } from './model';
 
-export function newCondition(field: Field): Condition {
+/** Drive stays in the model/evaluator for old rules, but cannot be added anew. */
+export const editableFields = ['tag', 'category', 'ownership', 'installed', 'library'] as const satisfies readonly Field[];
+export type EditableField = typeof editableFields[number];
+
+export function newCondition(field: EditableField): Condition {
 	switch (field) {
 		case 'tag': case 'category': return { type: 'condition', field, value: 0 };
 		case 'ownership': return { type: 'condition', field, value: 'personal' };
 		case 'installed': return { type: 'condition', field, value: true };
-		case 'library': case 'drive': return { type: 'condition', field, value: '' };
+		case 'library': return { type: 'condition', field, value: '' };
 	}
 }
 /** Existing nested NOT wrappers remain readable without technical wrapper rows. */
