@@ -125,4 +125,3 @@ Changes to Steam's internal APIs or conflicts with other plugins may make integr
 In such cases, native Steam filtering remains operational, and the panel reports that the membership bridge is unavailable.
 
 If the panel disappears following an update, check the logs and restart Steam rather than recreating collections.
-
