@@ -1,13 +1,13 @@
 [plugin]
 id = "com.steamadvancedcollections.plugin"
 name = "Steam Advanced Collections"
-version = "0.5.1"
+version = "0.5.1-beta"
 author = "NilsBzH"
 description = "Advanced filtering and exclusion rules for Steam collections."
 
 [assets]
 # reference resources to be included inside the plugin at compile time
-resources=["resources/**/*"]
+resources=["resources/**/*", "LICENSE"]
 
 # THE BELOW IS NOT YET IMPLEMENTED IN MILLENNIUM
 # --------------------

@@ -76,7 +76,7 @@ test('personal achievement replies cannot cross accounts or revive an unloaded c
 	cache.dispose(); finishes.shift()(response()); await sleep(); expect(changes).toHaveLength(0); expect(cache.read({ appid: 1 }, fields)).toEqual({});
 });
 test('native membership at 31% updates asynchronously, supports NOT and Cancel, preserves static data and unregisters notifications', async () => {
-	const account = '76561198111189155', game = { appid: 2515020, visible_in_game_list: true, store_tag: [10] }, window = { PLUGIN_LIST: {} };
+	const account = '76561198000000001', game = { appid: 2515020, visible_in_game_list: true, store_tag: [10] }, window = { PLUGIN_LIST: {} };
 	const Class = new Function('window', applyPatches(nativeCollection))(window);
 	const collection = new Class({ bIsEmpty: false, Matches: () => true }, [game]), other = new Class({ bIsEmpty: false, Matches: () => true }, [game]), staticCollection = new Class(undefined, [game], true); other.id = 'other'; staticCollection.id = 'static';
 	const original = { version: 1, enabled: true, expression: { type: 'condition', field: 'tag', value: 10 } }, disk = { [ruleKey(account, 'test')]: original }; let writes = 0, resolve, notify, unregistered = 0;

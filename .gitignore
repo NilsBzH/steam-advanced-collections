@@ -2,3 +2,11 @@ node_modules/
 /.millennium
 .millennium/lsp/
 AGENTS.md
+/.codex/
+/.agents/
+.env
+.env.*
+!.env.example
+*.log
+*.star
+/coverage/

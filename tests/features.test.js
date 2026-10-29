@@ -24,14 +24,14 @@ test('existing nested category/drive rules restore and evaluate unchanged with n
 		{ type: 'condition', field: 'category', value: 23 },
 		{ type: 'not', child: { type: 'condition', field: 'drive', value: 'D:' } },
 	] } };
-	const key = ruleKey('76561198111189155', 'legacy'), disk = { [key]: structuredClone(saved) }; let writes = 0;
+	const key = ruleKey('76561198000000001', 'legacy'), disk = { [key]: structuredClone(saved) }; let writes = 0;
 	const repository = new RuleRepository({ getAll: async () => structuredClone(disk), set: async (key, value) => { disk[key] = structuredClone(value); writes++; }, subscribe: () => () => {} });
 	try {
-		await repository.load(); expect(repository.get('76561198111189155', 'legacy')).toEqual(saved); expect(writes).toBe(0);
+		await repository.load(); expect(repository.get('76561198000000001', 'legacy')).toEqual(saved); expect(writes).toBe(0);
 		expect(evaluate(saved.expression, { categories: new Set([23]), drive: 'e:' })).toBe(true);
 		expect(evaluate(saved.expression, { categories: new Set([23]), drive: 'd:' })).toBe(false);
 		expect(evaluate(saved.expression, { categories: new Set([23]) })).toBeUndefined();
-		await repository.save('76561198111189155', 'legacy', saved);
+		await repository.save('76561198000000001', 'legacy', saved);
 		expect(disk[key]).toEqual(saved); expect(editableFields).toContain('category'); expect(editableFields).toContain('library'); expect(editableFields).not.toContain('drive');
 	} finally { repository.dispose(); }
 });

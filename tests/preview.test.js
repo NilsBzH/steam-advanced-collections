@@ -5,7 +5,7 @@ import { RuleRepository, ruleKey, PLUGIN_ID } from '../frontend/rules/repository
 import { RuleDraft } from '../frontend/rules/draft';
 import { applyPatches, nativeCollection } from './helpers/patches';
 
-const account = '76561198111189155';
+const account = '76561198000000001';
 const tag = (value) => ({ type: 'condition', field: 'tag', value });
 const saved = (expression = tag(10), enabled = true) => ({ version: 1, enabled, expression });
 async function fixture({ empty = false, patched = true, persisted = saved() } = {}) {
@@ -26,7 +26,7 @@ async function fixture({ empty = false, patched = true, persisted = saved() } = 
 	const current = () => scope.open && collections.get('test') === collection && currentAccount === account;
 	const preview = new NativePreview(app.membership, collection, account, current, (active) => status.push(active), undefined, 5);
 	const draft = new RuleDraft(() => repository.get(account, 'test'), (value) => repository.save(account, 'test', value), current);
-	return { app, repository, collection, other, staticCollection, collections, games, filter, disk, preview, draft, status, scope, current, writes: () => writes, subscriptions: () => subscriptions, switchAccount: () => { currentAccount = '76561198111189156'; }, dispose: () => { preview.dispose(); app.dispose(); } };
+	return { app, repository, collection, other, staticCollection, collections, games, filter, disk, preview, draft, status, scope, current, writes: () => writes, subscriptions: () => subscriptions, switchAccount: () => { currentAccount = '76561198000000002'; }, dispose: () => { preview.dispose(); app.dispose(); } };
 }
 const members = (collection) => [...collection.m_setApps].sort((a, b) => a - b);
 

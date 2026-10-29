@@ -10,7 +10,7 @@ test('compiled Millennium configuration adapter persists rules across a cold rel
 	const root = resolve(import.meta.dir, '..');
 	const directory = mkdtempSync(join(root, '.millennium', 'persistence-test-'));
 	const plugin = 'com.sac.persistence-regression';
-	const account = '76561198111189155', collection = 'uc-fztprRujSoR1';
+	const account = '76561198000000001', collection = 'dynamic-test-collection';
 	const rules = { version: 1, enabled: true, expression: { type: 'group', operator: 'and', children: [{ type: 'condition', field: 'tag', value: 10 }, { type: 'not', child: { type: 'condition', field: 'ownership', value: 'family' } }] } };
 	rules.expression.children.push(
 		{ type: 'condition', field: 'playtime', comparison: 'between', value: 2.5, upper: 20, period: 'twoWeeks' },
@@ -61,7 +61,7 @@ test('compiled Millennium configuration adapter persists rules across a cold rel
 		await first.save(account, collection, rules); first.dispose();
 		restored = new RuleRepository(coldAdapter()); await restored.load();
 		expect(restored.get(account, collection)).toEqual(rules);
-		expect(restored.get('76561198111189156', collection)).toBeUndefined();
+		expect(restored.get('76561198000000002', collection)).toBeUndefined();
 		expect(JSON.parse(readFileSync(diskPath, 'utf8')).plugins[plugin].config.unrelated).toBe('preserve');
 		expect(restored.count(account)).toBe(1);
 		// The compiled callback must also receive live changes in the right namespace.

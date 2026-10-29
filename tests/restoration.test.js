@@ -3,7 +3,7 @@ import { AdvancedCollections } from '../frontend/app';
 import { RuleRepository, ruleKey, PLUGIN_ID } from '../frontend/rules/repository';
 import { applyPatches, nativeCollection } from './helpers/patches';
 
-const account = '76561198111189155';
+const account = '76561198000000001';
 const rules = { version: 1, enabled: true, expression: { type: 'condition', field: 'tag', value: 10 } };
 async function until(predicate) {
 	const end = Date.now() + 2000;
@@ -52,7 +52,7 @@ test('configuration unavailable on the first attempt is retried and restored aut
 });
 test('a different Steam account never restores another account rules', async () => {
 	const f = fixture(); f.login();
-	f.environment.App.GetCurrentUser = () => ({ strSteamID: '76561198111189156' });
+	f.environment.App.GetCurrentUser = () => ({ strSteamID: '76561198000000002' });
 	const collection = f.create(); f.environment.collectionStore.collectionsFromStorage.set('test', collection);
 	try { await f.app.start(); expect(f.app.ready).toBe(true); expect(collection.calls).toBe(0); }
 	finally { f.app.dispose(); }
