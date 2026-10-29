@@ -1,9 +1,10 @@
-import { normalizeLocation, type GameFacts } from '../rules/model';
+import { normalizeLocation, type GameFacts, type Field } from '../rules/model';
 import type { SteamEnvironment, SteamObject } from '../diagnostics/runtime';
 import { steamFeatureChoices } from './features';
+import { SupplementalMetadata, type MetadataChange } from './supplemental';
 
 export interface Choice { value: string; label: string }
-export interface Catalog { tags: Choice[]; categories: Choice[]; libraries: Choice[]; drives: Choice[] }
+export interface Catalog { tags: Choice[]; categories: Choice[]; libraries: Choice[]; drives: Choice[]; developers?: Choice[]; publishers?: Choice[] }
 export function accountId(environment: SteamEnvironment): string | undefined {
 	try {
 		const id = environment.App?.GetCurrentUser?.()?.strSteamID;
@@ -36,7 +37,13 @@ export class SteamMetadata {
 	private disposed = false;
 	private cachedCatalog?: Catalog;
 	private listeners = new Set<() => void>();
-	constructor(private environment: SteamEnvironment) {}
+	private supplementalListeners = new Set<(change: MetadataChange) => void>();
+	readonly supplemental: SupplementalMetadata;
+	constructor(private environment: SteamEnvironment) {
+		this.supplemental = new SupplementalMetadata(environment, (change) => {
+			this.invalidate(); for (const listener of this.supplementalListeners) { try { listener(change); } catch { /* Isolate consumers. */ } }
+		});
+	}
 	async refresh(): Promise<void> {
 		const id = ++this.requestId;
 		const get = this.environment.SteamClient?.InstallFolder?.GetInstallFolders;
@@ -64,10 +71,19 @@ export class SteamMetadata {
 			throw error;
 		} finally { clearTimeout(timer); }
 	}
-	facts(app: SteamObject): GameFacts {
+	facts(app: SteamObject, fields: ReadonlySet<Field> = new Set()): GameFacts {
 		const facts: GameFacts = {};
 		try { facts.tags = numbers(typeof app.GetStoreTags === 'function' ? app.GetStoreTags() : app.store_tag); } catch { /* unavailable */ }
 		try { facts.categories = numbers(app.store_category); } catch { /* unavailable */ }
+		try {
+			// AppOverview getters honor Steam's off-topic review preference and expose
+			// all-time scores. Category 0 means no score, not 0% positive reviews.
+			const category = nonnegativeInteger(app.review_score), score = nonnegativeInteger(app.review_percentage);
+			if (category !== undefined && category >= 1 && category <= 9) {
+				facts.reviewCategory = category;
+				if (score !== undefined && score <= 100) facts.reviewScore = score;
+			}
+		} catch { /* Unknown review coverage remains unknown. */ }
 		try { facts.playtimeMinutes = nonnegativeInteger(app.minutes_playtime_forever); } catch { /* unavailable */ }
 		try { facts.playtimeRecentMinutes = nonnegativeInteger(app.minutes_playtime_last_two_weeks); } catch { /* unavailable */ }
 		try {
@@ -102,15 +118,23 @@ export class SteamMetadata {
 				if (location?.mounted) { facts.library = location.library; facts.drive = location.drive; facts.installSizeBytes = location.sizeBytes; }
 			}
 		} catch { /* A detached drive has unknown current installation metadata. */ }
+		try {
+			this.supplemental.setAccount(accountId(this.environment) ?? '');
+			Object.assign(facts, this.supplemental.read(app, fields));
+		} catch { /* Incompatible complementary metadata must never interrupt Steam. */ }
 		return facts;
 	}
 	catalog(): Catalog {
 		if (this.cachedCatalog) return this.cachedCatalog;
 		const tags = new Set<number>(), categories = new Set<number>();
+		const developers = new Map<string, string>(), publishers = new Map<string, string>();
 		for (const app of this.environment.appStore?.allApps ?? []) {
 			const facts = this.facts(app);
 			facts.tags?.forEach((id) => tags.add(id));
 			facts.categories?.forEach((id) => categories.add(id));
+			const creators = this.supplemental.names(app.appid);
+			creators.developers?.forEach((name) => developers.set(name.toLowerCase(), name));
+			creators.publishers?.forEach((name) => publishers.set(name.toLowerCase(), name));
 		}
 		const libraries = this.folders.filter((f) => typeof f.strFolderPath === 'string').map((f) => ({ value: normalizeLocation(f.strFolderPath), label: f.strFolderPath + (f.bIsMounted === false ? ' (offline)' : '') }));
 		const drives = Array.from(new Set(libraries.map((f) => /^[a-z]:/i.exec(f.value)?.[0]).filter((value): value is string => !!value))).map((value) => ({ value, label: value.toUpperCase() }));
@@ -122,10 +146,13 @@ export class SteamMetadata {
 			}).sort((a, b) => a.label.localeCompare(b.label)),
 			categories: steamFeatureChoices(categories),
 			libraries, drives,
+			developers: [...developers.values()].sort((a, b) => a.localeCompare(b, 'en')).map((name) => ({ value: name, label: name })),
+			publishers: [...publishers.values()].sort((a, b) => a.localeCompare(b, 'en')).map((name) => ({ value: name, label: name })),
 		};
 	}
 	invalidate(): void { this.cachedCatalog = undefined; }
 	subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
+	subscribeSupplemental(listener: (change: MetadataChange) => void): () => void { this.supplementalListeners.add(listener); return () => { this.supplementalListeners.delete(listener); }; }
 	private changed(): void { this.invalidate(); for (const listener of this.listeners) { try { listener(); } catch { /* Isolate consumers. */ } } }
-	dispose(): void { this.disposed = true; this.requestId++; this.listeners.clear(); }
+	dispose(): void { this.disposed = true; this.requestId++; this.listeners.clear(); this.supplementalListeners.clear(); this.supplemental.dispose(); }
 }

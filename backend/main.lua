@@ -8,12 +8,16 @@ return {
         millennium.ready()
     end,
     on_unload = function()
+        local ok, status = pcall(millennium.call_frontend_method, "metadataStatus", {})
+        if ok then logger:info("[SAC] metadata.sources " .. tostring(status)) end
         if frontend_ready then pcall(millennium.call_frontend_method, "disposePlugin", {}) end
         logger:info("[SAC] backend unloaded")
     end,
     on_frontend_loaded = function()
         frontend_ready = true
         logger:info("[SAC] frontend attached")
+        local ok, status = pcall(millennium.call_frontend_method, "metadataStatus", {})
+        if ok then logger:info("[SAC] metadata.sources " .. tostring(status)) end
     end,
     patches = require("diagnostic_patch"),
 }

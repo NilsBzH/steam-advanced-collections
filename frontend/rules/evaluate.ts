@@ -9,6 +9,13 @@ function condition(rule: Condition, facts: GameFacts, now: number): Truth {
 		case 'category': return facts.categories?.has(rule.value);
 		case 'ownership': return facts.ownership === undefined ? undefined : facts.ownership === rule.value;
 		case 'installed': return facts.installed === undefined ? undefined : facts.installed === rule.value;
+		case 'developer': case 'publisher': {
+			const names = rule.field === 'developer' ? facts.developers : facts.publishers;
+			return names?.some((name) => name.trim().toLowerCase() === rule.value.trim().toLowerCase());
+		}
+		case 'language': return facts.languages?.[rule.support]?.has(rule.value);
+		case 'reviews': return rule.mode === 'category' ? facts.reviewCategory === undefined ? undefined : facts.reviewCategory === rule.value : evaluateMeasurement(rule, facts, now);
+		case 'achievementProgress': return evaluateMeasurement(rule, facts, now);
 		case 'playtime': case 'lastPlayed': case 'installSize': case 'releaseDate': return evaluateMeasurement(rule, facts, now);
 		case 'library': case 'drive': {
 			const value = facts[rule.field];

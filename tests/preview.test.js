@@ -29,6 +29,31 @@ async function fixture({ empty = false, patched = true, persisted = saved() } = 
 	return { app, repository, collection, other, staticCollection, collections, games, filter, disk, preview, draft, status, scope, current, writes: () => writes, subscriptions: () => subscriptions, switchAccount: () => { currentAccount = '76561198111189156'; }, dispose: () => { preview.dispose(); app.dispose(); } };
 }
 const members = (collection) => [...collection.m_setApps].sort((a, b) => a - b);
+
+test('five catalog criteria load on demand into native draft preview, refresh only the editor collection and Cancel writes nothing', async () => {
+	const f = await fixture();
+	try {
+		const env = f.app.environment, items = new Map(); let requests = 0;
+		env.storeItemCache = { m_bInitialized: true, GetApp: (id) => items.get(id), QueueAppRequest: async (id) => {
+			requests++; items.set(id, { BContainDataRequest: () => true, m_BasicInfo: { developers: [{ name: id === 2 ? 'Studio' : 'Other' }], publishers: [{ name: 'Publisher' }] }, m_rgSupportedLanguages: [{ elanguage: 2, supported: true, subtitles: true, full_audio: true }] }); return 1;
+		} };
+		env.appAchievementProgressCache = { m_achievementProgress: { mapCache: new Map(f.games.map((game) => [game.appid, { total: 10, unlocked: 5, cache_time: 1000 }])) } };
+		f.games.forEach((game) => { game.review_score = 8; game.review_percentage = 90; });
+		await f.app.start(); const otherCalls = f.other.calls, staticCalls = f.staticCollection.calls;
+		const expression = { type: 'group', operator: 'and', children: [
+			{ type: 'condition', field: 'developer', value: 'STUDIO' },
+			{ type: 'condition', field: 'publisher', value: 'Publisher' },
+			{ type: 'condition', field: 'reviews', mode: 'score', comparison: 'gt', value: 80 },
+			{ type: 'condition', field: 'achievementProgress', comparison: 'between', value: 25, upper: 75 },
+			{ type: 'condition', field: 'language', support: 'audio', value: 2 },
+		] };
+		f.preview.update(saved(expression), true); await Bun.sleep(1100);
+		expect(members(f.collection)).toEqual([2]); expect(requests).toBeGreaterThan(0); expect(requests).toBeLessThanOrEqual(4);
+		expect(f.other.calls).toBe(otherCalls); expect(f.staticCollection.calls).toBe(staticCalls); expect(f.writes()).toBe(0);
+		const calls = f.collection.calls; await Bun.sleep(350); expect(f.collection.calls).toBe(calls);
+		f.preview.cancel(); expect(members(f.collection)).toEqual([1]); expect(f.writes()).toBe(0);
+	} finally { f.dispose(); }
+});
 test('a temporary rule changes native membership after debounce, with no persistence or filter changes', async () => {
 	const f = await fixture(); const before = structuredClone(f.disk);
 	try {

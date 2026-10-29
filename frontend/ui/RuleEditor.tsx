@@ -5,6 +5,7 @@ import type { Catalog, Choice } from '../steam/metadata';
 import { steamFeatureChoices } from '../steam/features';
 import { text } from './text';
 import { MeasurementEditor } from './MeasurementEditor';
+import { CatalogEditor } from './CatalogEditor';
 
 function Choices({ choices, value, onChange }: { choices: Choice[]; value: string; onChange: (value: string) => void }) {
 	return <select className="sac-value" aria-label={text.conditionValue} value={value} onChange={(event) => onChange(event.currentTarget.value)}>
@@ -28,7 +29,10 @@ function ConditionEditor({ rule, catalog, onChange }: { rule: Condition; catalog
 		case 'library': case 'drive':
 			return <Choices choices={rule.field === 'library' ? catalog.libraries : catalog.drives} value={rule.value} onChange={(value) => onChange({ ...rule, value })} />;
 		case 'playtime': case 'lastPlayed': case 'installSize': case 'releaseDate':
+		case 'achievementProgress':
 			return <MeasurementEditor rule={rule} onChange={onChange} />;
+		case 'developer': case 'publisher': case 'reviews': case 'language':
+			return <CatalogEditor rule={rule} catalog={catalog} onChange={onChange} />;
 	}
 }
 function Remove({ group, onRemove }: { group?: boolean; onRemove?: () => void }) {
@@ -39,7 +43,7 @@ function RuleNode({ rule, catalog, onChange, onRemove }: { rule: Rule; catalog: 
 	const [collapsed, setCollapsed] = useState(false);
 	const { node, inverted } = describeRule(rule);
 	const change = (next: Rule) => onChange(invertRule(next, inverted));
-	const measurement = node.type === 'condition' && (node.field === 'playtime' || node.field === 'lastPlayed' || node.field === 'installSize' || node.field === 'releaseDate');
+	const measurement = node.type === 'condition' && (node.field === 'playtime' || node.field === 'lastPlayed' || node.field === 'installSize' || node.field === 'releaseDate' || node.field === 'reviews' || node.field === 'achievementProgress' || node.field === 'language');
 	if (node.type === 'condition') return <div className="sac-condition">
 		<select className="sac-field" aria-label={text.conditionType} value={node.field} onChange={(event) => {
 			const field = event.currentTarget.value as EditableField;

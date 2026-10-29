@@ -22,7 +22,7 @@ test('compiled editor supports readable operators, nesting, collapsing and remov
 			return [hooks.get(key), (value) => hooks.set(key, value)];
 		};
 		const jsx = (type, props, key) => ({ type, props, key });
-		const window = { PLUGIN_LIST: {}, MILLENNIUM_API: {}, SP_REACT: { useState }, SP_JSX_FACTORY: { jsx, jsxs: jsx }, MILLENNIUM_BACKEND_IPC: { postMessage() {} } };
+		const window = { PLUGIN_LIST: {}, MILLENNIUM_API: {}, SP_REACT: { useState, useId: () => currentPath }, SP_JSX_FACTORY: { jsx, jsxs: jsx }, MILLENNIUM_BACKEND_IPC: { postMessage() {} } };
 		runInNewContext(bundle, { window, console, MILLENNIUM_BACKEND_IPC: window.MILLENNIUM_BACKEND_IPC });
 		const { RuleEditor } = window.PLUGIN_LIST[plugin].default();
 		let rule = { type: 'condition', field: 'tag', value: 10 }, edits = 0;
@@ -87,5 +87,25 @@ test('compiled editor supports readable operators, nesting, collapsing and remov
 			find((node) => node.props?.['aria-label'] === 'Condition type').props.onChange({ currentTarget: { value: field } });
 			expect(rule.children[0].field).toBe(field); expect(find((node) => node.props?.['aria-label'] === control)).toBeDefined();
 		}
+		for (const field of ['developer', 'publisher']) {
+			rule = { type: 'condition', field, value: '' };
+			find((node) => node.props?.['aria-label'] === 'Condition type').props.onChange({ currentTarget: { value: field } });
+			const name = find((node) => node.props?.['aria-label'] === 'Creator name'); expect(name.type).toBe('input'); expect(name.props.list).toBeDefined();
+			name.props.onChange({ currentTarget: { value: 'SEGA' } }); expect(rule.children[0].value).toBe('SEGA');
+			find((node) => node.props?.['aria-label'] === 'Condition operator').props.onChange({ currentTarget: { value: 'not' } }); expect(rule.children[0].type).toBe('not');
+		}
+		rule = { type: 'condition', field: 'reviews', mode: 'score', comparison: 'between', value: 0, upper: 100 };
+		expect(find((node) => node.type === 'input' && node.props['aria-label'] === 'Upper value').props.max).toBe(100);
+		find((node) => node.props?.['aria-label'] === 'Review mode').props.onChange({ currentTarget: { value: 'category' } });
+		expect(rule.children[0]).toEqual({ type: 'condition', field: 'reviews', mode: 'category', value: 8 });
+		expect(find((node) => node.type === 'option' && label(node) === 'Overwhelmingly Positive')).toBeDefined();
+		find((node) => node.props?.['aria-label'] === 'Review category').props.onChange({ currentTarget: { value: '9' } }); expect(rule.children[0].value).toBe(9);
+		find((node) => node.props?.['aria-label'] === 'Condition type').props.onChange({ currentTarget: { value: 'achievementProgress' } });
+		expect(find((node) => node.type === 'input' && node.props['aria-label'] === 'Condition value').props.max).toBe(100);
+		find((node) => node.props?.['aria-label'] === 'Condition type').props.onChange({ currentTarget: { value: 'language' } });
+		find((node) => node.props?.['aria-label'] === 'Language support').props.onChange({ currentTarget: { value: 'audio' } });
+		find((node) => node.props?.['aria-label'] === 'Language').props.onChange({ currentTarget: { value: '2' } });
+		expect(rule.children[0]).toMatchObject({ field: 'language', support: 'audio', value: 2 });
+		expect(find((node) => node.type === 'option' && label(node) === 'French')).toBeDefined();
 	} finally { rmSync(directory, { recursive: true, force: true }); }
 }, 20000);

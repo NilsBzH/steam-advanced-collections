@@ -1,4 +1,4 @@
-export type Field = 'tag' | 'category' | 'ownership' | 'installed' | 'library' | 'drive' | 'playtime' | 'lastPlayed' | 'installSize' | 'releaseDate';
+export type Field = 'tag' | 'category' | 'ownership' | 'installed' | 'library' | 'drive' | 'playtime' | 'lastPlayed' | 'installSize' | 'releaseDate' | 'developer' | 'publisher' | 'reviews' | 'achievementProgress' | 'language';
 export type NumericComparison = 'gt' | 'lt' | 'eq' | 'between';
 export type AgeUnit = 'days' | 'months' | 'years';
 export type SizeUnit = 'MB' | 'GB';
@@ -7,12 +7,18 @@ export type MeasurementCondition =
 	({ type: 'condition'; field: 'playtime'; comparison: NumericComparison; period: 'total' | 'twoWeeks' } & RangeInput) |
 	({ type: 'condition'; field: 'lastPlayed'; comparison: 'gt' | 'lt' | 'between'; unit: AgeUnit } & RangeInput) |
 	({ type: 'condition'; field: 'installSize'; comparison: NumericComparison; unit: SizeUnit } & RangeInput) |
-	({ type: 'condition'; field: 'releaseDate'; comparison: 'before' | 'after' | 'between' } & RangeInput);
+	({ type: 'condition'; field: 'releaseDate'; comparison: 'before' | 'after' | 'between' } & RangeInput) |
+	({ type: 'condition'; field: 'reviews'; mode: 'score'; comparison: NumericComparison } & RangeInput) |
+	({ type: 'condition'; field: 'achievementProgress'; comparison: NumericComparison } & RangeInput);
+export type LanguageSupport = 'interface' | 'subtitles' | 'audio';
 export type Condition =
 	{ type: 'condition'; field: 'tag' | 'category'; value: number } |
 	{ type: 'condition'; field: 'ownership'; value: 'personal' | 'family' } |
 	{ type: 'condition'; field: 'installed'; value: boolean } |
-	{ type: 'condition'; field: 'library' | 'drive'; value: string } | MeasurementCondition;
+	{ type: 'condition'; field: 'library' | 'drive'; value: string } |
+	{ type: 'condition'; field: 'developer' | 'publisher'; value: string } |
+	{ type: 'condition'; field: 'reviews'; mode: 'category'; value: number } |
+	{ type: 'condition'; field: 'language'; support: LanguageSupport; value: number } | MeasurementCondition;
 export type Rule = Condition | { type: 'group'; operator: 'and' | 'or'; children: Rule[] } | { type: 'not'; child: Rule };
 export interface SavedRules { version: 1; enabled: boolean; expression: Rule }
 export interface GameFacts {
@@ -29,12 +35,19 @@ export interface GameFacts {
 	lastPlayed?: number | null;
 	installSizeBytes?: number;
 	releaseYear?: number;
+	developers?: readonly string[];
+	publishers?: readonly string[];
+	reviewScore?: number;
+	reviewCategory?: number;
+	/** null = confirmed no Steam achievements; undefined = unavailable progress. */
+	achievementProgress?: number | null;
+	languages?: Partial<Record<LanguageSupport, ReadonlySet<number>>>;
 }
 export const emptyRules = (): SavedRules => ({ version: 1, enabled: false, expression: { type: 'group', operator: 'and', children: [] } });
 
 /** Include every semantic condition property in both Save verification and draft conflicts. */
 export function ruleFingerprint(value: SavedRules): string {
-	return JSON.stringify(value, ['version', 'enabled', 'expression', 'type', 'operator', 'children', 'child', 'field', 'value', 'comparison', 'upper', 'unit', 'period']);
+	return JSON.stringify(value, ['version', 'enabled', 'expression', 'type', 'operator', 'children', 'child', 'field', 'value', 'comparison', 'upper', 'unit', 'period', 'mode', 'support']);
 }
 
 function validMeasurement(node: Record<string, unknown>): boolean {
@@ -51,6 +64,9 @@ function validMeasurement(node: Record<string, unknown>): boolean {
 		if (node.unit !== 'days' && node.unit !== 'months' && node.unit !== 'years') return false;
 		const days = node.unit === 'years' ? 366 : node.unit === 'months' ? 31 : 1;
 		operators = ['gt', 'lt', 'between']; valid = (value) => Number.isSafeInteger(value) && finite(value, 100000000 / days);
+	} else if (node.field === 'reviews' || node.field === 'achievementProgress') {
+		if (node.field === 'reviews' && node.mode !== 'score') return false;
+		operators = ['gt', 'lt', 'eq', 'between']; valid = (value) => finite(value, 100);
 	} else {
 		operators = ['before', 'after', 'between']; valid = (value) => Number.isSafeInteger(value) && finite(value, 9999) && (value as number) >= 1;
 	}
@@ -84,7 +100,11 @@ export function isRule(value: unknown): value is Rule {
 				case 'ownership': if (node.value !== 'personal' && node.value !== 'family') return false; break;
 				case 'installed': if (typeof node.value !== 'boolean') return false; break;
 				case 'library': case 'drive': if (typeof node.value !== 'string' || !node.value.trim() || node.value.length > 4096) return false; break;
-				case 'playtime': case 'lastPlayed': case 'installSize': case 'releaseDate': if (!validMeasurement(node)) return false; break;
+				case 'developer': case 'publisher': if (typeof node.value !== 'string' || !node.value.trim() || node.value.length > 512) return false; break;
+				case 'language': if (!['interface', 'subtitles', 'audio'].includes(node.support as string) || !Number.isSafeInteger(node.value) || (node.value as number) < 0 || (node.value as number) > 31) return false; break;
+				case 'reviews': if (node.mode === 'category') { if (!Number.isSafeInteger(node.value) || (node.value as number) < 1 || (node.value as number) > 9) return false; break; }
+				// Review score shares the validated percentage controls.
+				case 'playtime': case 'lastPlayed': case 'installSize': case 'releaseDate': case 'achievementProgress': if (!validMeasurement(node)) return false; break;
 				default: return false;
 			}
 		} else return false;

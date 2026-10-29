@@ -32,6 +32,8 @@ export function evaluateMeasurement(rule: MeasurementCondition, facts: GameFacts
 		}
 		case 'installSize': return compare(facts.installSizeBytes === undefined ? undefined : facts.installSizeBytes / (rule.unit === 'MB' ? 1024 ** 2 : 1024 ** 3), rule);
 		case 'releaseDate': return compare(facts.releaseYear, rule);
+		case 'reviews': return compare(facts.reviewScore, rule);
+		case 'achievementProgress': return facts.achievementProgress === null ? false : compare(facts.achievementProgress, rule);
 		case 'lastPlayed': {
 			const last = facts.lastPlayed;
 			if (last === undefined || !Number.isFinite(now) || rule.value === null) return undefined;

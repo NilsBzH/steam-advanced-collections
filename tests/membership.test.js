@@ -18,10 +18,10 @@ async function fixture({ empty = false, expression = tag(10), patched = true } =
 	const disk = { [ruleKey(account, 'test')]: saved(expression) };
 	const repository = new RuleRepository({ getAll: async () => ({ ...disk }), set: async (key, value) => { disk[key] = structuredClone(value); }, subscribe: () => () => {} });
 	await repository.load();
-	const environment = { App: { GetCurrentUser: () => ({ strSteamID: account }) }, collectionStore: { collectionsFromStorage: new Map([['test', collection], ['static', staticCollection]]) } };
+	const environment = { App: { GetCurrentUser: () => ({ strSteamID: account }) }, appStore: { allApps: games }, collectionStore: { collectionsFromStorage: new Map([['test', collection], ['static', staticCollection]]) } };
 	const bridge = new MembershipBridge(environment, repository, new SteamMetadata(environment), () => {});
 	window.PLUGIN_LIST[PLUGIN_ID] = { integration: bridge };
-	return { bridge, collection, staticCollection, repository, games, filter, window, nativeCalls: () => nativeCalls };
+	return { bridge, collection, staticCollection, repository, games, filter, window, environment, nativeCalls: () => nativeCalls };
 }
 test('native predicate AND advanced rules, with exactly one native call per candidate', async () => {
 	const f = await fixture(); f.bridge.refresh();
@@ -62,4 +62,28 @@ test('switching accounts cannot apply the previous account rules to a same-ID co
 	const other = new MembershipBridge({ App: { GetCurrentUser: () => ({ strSteamID: '76561197960265730' }) } }, f.repository, new SteamMetadata({}), () => {});
 	f.window.PLUGIN_LIST[PLUGIN_ID].integration = other;
 	f.collection.UpdateAllApps(); expect([...f.collection.m_setApps]).toEqual([1, 2]);
+});
+
+test('asynchronous metadata only recalculates collections using the changed criterion and native candidate', async () => {
+	const f = await fixture({ expression: { type: 'condition', field: 'reviews', mode: 'score', comparison: 'gt', value: 80 } });
+	f.games.forEach((game) => { game.review_score = 8; game.review_percentage = game.appid === 1 ? 90 : 70; });
+	f.bridge.refresh(); const calls = f.collection.calls;
+	f.bridge.refresh(new Map([[1, new Set(['language'])]])); expect(f.collection.calls).toBe(calls);
+	f.bridge.refresh(new Map([[3, new Set(['reviews'])]])); expect(f.collection.calls).toBe(calls);
+	f.bridge.refresh(new Map([[1, new Set(['reviews'])]])); expect(f.collection.calls).toBe(calls + 1);
+	expect([...f.collection.m_setApps]).toEqual([1]); expect(f.staticCollection.calls).toBe(0); f.bridge.dispose();
+});
+
+test('known rejecting AND predicates prevent complementary requests for unrelated library games', async () => {
+	const f = await fixture({ expression: { type: 'group', operator: 'and', children: [tag(10), { type: 'condition', field: 'developer', value: 'Studio' }] } });
+	const requested = [];
+	f.environment.storeItemCache = { m_bInitialized: true, GetApp: () => undefined, QueueAppRequest: async (id) => { requested.push(id); return 2; } };
+	f.bridge.refresh(); await Bun.sleep(15);
+	expect(requested).toEqual([1]); f.bridge.dispose();
+});
+
+test('unknown local library blockers in an advanced-only collection do not fetch the whole uninstalled library', async () => {
+	const f = await fixture({ empty: true, expression: { type: 'group', operator: 'and', children: [{ type: 'condition', field: 'library', value: 'E:' }, { type: 'condition', field: 'language', support: 'interface', value: 0 }] } });
+	const requested = []; f.environment.storeItemCache = { m_bInitialized: true, GetApp: () => undefined, QueueAppRequest: async (id) => { requested.push(id); return 2; } };
+	f.bridge.refresh(); await Bun.sleep(15); expect(requested).toEqual([]); expect([...f.collection.m_setApps]).toEqual([]); f.bridge.dispose();
 });

@@ -1,5 +1,6 @@
 import { evaluate } from '../rules/evaluate';
-import { hasRules, isSavedRules, type SavedRules } from '../rules/model';
+import { hasRules, isSavedRules, type SavedRules, type Field } from '../rules/model';
+import { couldAffectUnknown, ruleFields } from './supplemental';
 import type { RuleRepository } from '../rules/repository';
 import type { SteamEnvironment, SteamObject } from '../diagnostics/runtime';
 import { accountId, type SteamMetadata } from './metadata';
@@ -16,7 +17,17 @@ export class MembershipBridge {
 		private repository: RuleRepository,
 		private metadata: SteamMetadata,
 		private log: (message: string, details?: unknown) => void,
-	) {}
+	) {
+		metadata.supplemental?.setDemandCheck((appid, fields) => {
+			if (!this.active) return false;
+			try {
+				for (const collection of environment.collectionStore?.collectionsFromStorage?.values?.() ?? []) {
+					if (this.eligible(collection) && this.affected(collection, new Map([[appid, fields]]))) return true;
+				}
+			} catch { /* Stale or closed editors no longer need queued requests. */ }
+			return false;
+		});
+	}
 	private eligible(collection: SteamObject): boolean {
 		return this.active && collection?.bIsDynamic === true && collection.bIsEditable === true && typeof collection.id === 'string';
 	}
@@ -80,7 +91,11 @@ export class MembershipBridge {
 		if (!native) return false;
 		const fallback = collection.internalAppFilter.bIsEmpty ? false : native;
 		try {
-			const result = evaluate(rules!.expression, this.metadata.facts(app));
+			// Resolve cheap local predicates first. An AND already rejected by a tag,
+			// library or other known condition must not fetch Store data for that game.
+			const local = this.metadata.facts(app);
+			let result = evaluate(rules!.expression, local);
+			if (result === undefined && couldAffectUnknown(rules!.expression, local, fallback)) result = evaluate(rules!.expression, this.metadata.facts(app, ruleFields(rules!.expression)));
 			if (result === undefined && !this.warnedUnknown.has(collection.id)) {
 				this.warnedUnknown.add(collection.id);
 				this.log('membership.metadata unavailable; native result retained');
@@ -90,13 +105,14 @@ export class MembershipBridge {
 	}
 	isObserved(collection: SteamObject): boolean { return this.observed.has(collection); }
 	/** Only request native recalculation when the exact source bridge is present. */
-	refresh(): { configured: number; applied: number; unavailable: number } {
+	refresh(changes?: ReadonlyMap<number, ReadonlySet<Field>>): { configured: number; applied: number; unavailable: number } {
 		const result = { configured: 0, applied: 0, unavailable: 0 };
 		if (!this.active || !this.repository.isLoaded()) return result;
 		try {
 			for (const collection of this.environment.collectionStore?.collectionsFromStorage?.values?.() ?? []) {
 				const configured = hasRules(this.rulesFor(collection));
 				if (!this.eligible(collection)) continue;
+				if (changes && !this.affected(collection, changes)) continue;
 				if (configured) result.configured++;
 				if (this.canApply(collection) && (configured || this.managed.has(collection))) {
 					try { collection.UpdateAllApps(); result.applied++; } catch { this.log('membership.refresh failed; native collection retained'); }
@@ -105,6 +121,16 @@ export class MembershipBridge {
 			}
 		} catch { this.log('membership.refresh unavailable'); }
 		return result;
+	}
+	private affected(collection: SteamObject, changes: ReadonlyMap<number, ReadonlySet<Field>>): boolean {
+		const rules = this.rulesFor(collection); if (!hasRules(rules)) return false;
+		const fields = ruleFields(rules!.expression);
+		for (const [appid, changed] of changes) {
+			if (![...changed].some((field) => fields.has(field))) continue;
+			const app = this.environment.appStore?.GetAppOverviewByAppID?.(appid) ?? this.environment.appStore?.allApps?.find((item: SteamObject) => item.appid === appid);
+			if (app && collection.internalAppFilter?.Matches?.(app)) return true;
+		}
+		return false;
 	}
 	dispose(): void {
 		if (!this.active) return;

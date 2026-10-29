@@ -3,6 +3,7 @@ import { RuleRepository } from './rules/repository';
 import { SteamMetadata, accountId } from './steam/metadata';
 import { MembershipBridge } from './steam/membership';
 import { NativePreview } from './steam/preview';
+import type { Field } from './rules/model';
 
 export type ObserveAfter = (target: SteamObject, method: string, handler: (args: any[], result: any) => void) => () => void;
 export class AdvancedCollections {
@@ -14,6 +15,8 @@ export class AdvancedCollections {
 	private listeners = new Set<() => void>();
 	private disposers: Array<() => void> = [];
 	private pending?: ReturnType<typeof setTimeout>;
+	private supplementalPending?: ReturnType<typeof setTimeout>;
+	private supplementalChanges = new Map<number, Set<Field>>();
 	private periodic?: ReturnType<typeof setInterval>;
 	private readinessPoll?: ReturnType<typeof setInterval>;
 	private refreshFolders = false;
@@ -24,6 +27,7 @@ export class AdvancedCollections {
 	private watched = new WeakMap<object, Set<string>>();
 	private unavailableEvents = new Set<string>();
 	private previews = new Map<object, NativePreview>();
+	private achievementNotifications = false;
 	constructor(readonly environment: SteamEnvironment, readonly repository: RuleRepository, private observe: ObserveAfter, private options: { readinessIntervalMs?: number; periodicIntervalMs?: number } = {}) {
 		this.metadata = new SteamMetadata(environment);
 		this.membership = new MembershipBridge(environment, repository, this.metadata, log);
@@ -32,6 +36,17 @@ export class AdvancedCollections {
 		if (this.started || !this.active) return;
 		this.started = true;
 		this.disposers.push(this.repository.subscribe(() => this.schedule()));
+		this.disposers.push(this.metadata.subscribeSupplemental((change) => {
+			if (!this.active) return;
+			const fields = this.supplementalChanges.get(change.appid) ?? new Set<Field>();
+			change.fields.forEach((field) => fields.add(field)); this.supplementalChanges.set(change.appid, fields);
+			if (!this.supplementalPending) this.supplementalPending = setTimeout(() => {
+				this.supplementalPending = undefined;
+				if (!this.active || !this.ready) { this.supplementalChanges.clear(); return; }
+				const changes = this.supplementalChanges; this.supplementalChanges = new Map();
+				this.membership.refresh(changes); this.notify();
+			}, 150);
+		}));
 		// Account IDs and collection objects can arrive after the initial library
 		// event. Keep watching readiness; never require opening the editor to restore.
 		this.readinessPoll = setInterval(() => { void this.ensureReady(); }, this.options.readinessIntervalMs ?? 1000);
@@ -65,6 +80,7 @@ export class AdvancedCollections {
 			this.watch(this.environment.collectionStore, 'OnCloudStorageChanged');
 			this.watch(this.environment.App, 'OnCurrentUserChanges', true);
 			this.watch(this.environment.installFolderStore, 'OnInstallFolderChanges', true);
+			this.watchAchievementCache();
 			const changed = !this.ready || snapshot.account !== this.currentAccount || snapshot.collections.length !== this.currentCollections.length || snapshot.collections.some((collection, index) => collection !== this.currentCollections[index]);
 			if (!changed) return;
 			this.ready = false;
@@ -73,6 +89,7 @@ export class AdvancedCollections {
 			const latest = this.steamSnapshot();
 			if (!latest || latest.account !== snapshot.account) return;
 			this.currentAccount = latest.account;
+			this.metadata.supplemental.setAccount(latest.account);
 			this.currentCollections = latest.collections;
 			this.error = undefined;
 			this.ready = true;
@@ -106,6 +123,30 @@ export class AdvancedCollections {
 			methods.add(method);
 		} catch { log('event observer failed', { method }); }
 	}
+	private watchAchievementCache(): void {
+		const sessions = this.environment.SteamClient?.GameSessions;
+		if (!this.achievementNotifications && typeof sessions?.RegisterForAchievementNotification === 'function') {
+			try {
+				const subscription = sessions.RegisterForAchievementNotification((event: SteamObject) => {
+					if (this.active && Number.isSafeInteger(event?.unAppID) && event.unAppID > 0) this.metadata.supplemental.invalidateProgress(event.unAppID);
+				});
+				if (typeof subscription?.unregister === 'function') this.disposers.push(() => subscription.unregister());
+				this.achievementNotifications = true;
+			} catch { log('achievement notifications unavailable; periodic fallback retained'); }
+		}
+		const target = this.environment.appAchievementProgressCache;
+		if (!target) return;
+		for (const method of ['RequestCacheUpdate', 'LoadCacheFile', 'OnAchievementNotification']) {
+			if (typeof target[method] !== 'function' || this.watched.get(target)?.has(method)) continue;
+			try {
+				this.disposers.push(this.observe(target, method, (_args, result) => {
+					const poll = () => { if (this.active) this.metadata.supplemental.pollAchievements(); };
+					if (result && typeof result.then === 'function') void Promise.resolve(result).then(poll, poll); else poll();
+				}));
+				let methods = this.watched.get(target); if (!methods) { methods = new Set(); this.watched.set(target, methods); } methods.add(method);
+			} catch { log('achievement cache observer unavailable; periodic fallback retained'); }
+		}
+	}
 	private schedule(folders = false): void {
 		if (!this.active) return;
 		this.refreshFolders ||= folders;
@@ -123,6 +164,7 @@ export class AdvancedCollections {
 		}
 		if (!this.active) return;
 		this.metadata.invalidate();
+		this.metadata.supplemental.pollAchievements();
 		this.membership.refresh();
 		this.notify();
 	}
@@ -143,7 +185,7 @@ export class AdvancedCollections {
 		this.active = false;
 		for (const preview of this.previews.values()) preview.dispose(false);
 		this.previews.clear();
-		clearTimeout(this.pending); clearInterval(this.periodic); clearInterval(this.readinessPoll);
+		clearTimeout(this.pending); clearTimeout(this.supplementalPending); this.supplementalChanges.clear(); clearInterval(this.periodic); clearInterval(this.readinessPoll);
 		for (const dispose of this.disposers.reverse()) { try { dispose(); } catch { /* Another plugin may have replaced the method. */ } }
 		this.repository.dispose();
 		this.membership.dispose();

@@ -17,6 +17,12 @@ test('compiled Millennium configuration adapter persists rules across a cold rel
 		{ type: 'condition', field: 'lastPlayed', comparison: 'gt', value: 6, unit: 'months' },
 		{ type: 'condition', field: 'installSize', comparison: 'between', value: 5, upper: 20, unit: 'GB' },
 		{ type: 'condition', field: 'releaseDate', comparison: 'between', value: 2000, upper: 2010 },
+		{ type: 'condition', field: 'developer', value: 'FromSoftware' },
+		{ type: 'condition', field: 'publisher', value: 'SEGA' },
+		{ type: 'condition', field: 'reviews', mode: 'score', comparison: 'between', value: 75.5, upper: 100 },
+		{ type: 'condition', field: 'reviews', mode: 'category', value: 8 },
+		{ type: 'condition', field: 'achievementProgress', comparison: 'eq', value: 0 },
+		{ type: 'condition', field: 'language', support: 'audio', value: 2 },
 	);
 	const diskPath = join(directory, 'millennium-config.json');
 	let first, restored;

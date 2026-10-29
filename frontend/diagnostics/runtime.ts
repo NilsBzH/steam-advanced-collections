@@ -6,6 +6,10 @@ export interface SteamEnvironment {
 	installFolderStore?: SteamObject;
 	App?: SteamObject;
 	SteamClient?: SteamObject;
+	storeItemCache?: SteamObject;
+	appDetailsStore?: SteamObject;
+	appDetailsCache?: SteamObject;
+	appAchievementProgressCache?: SteamObject;
 }
 export interface DiagnosticRecord {
 	capability: string;

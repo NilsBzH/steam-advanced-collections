@@ -9,6 +9,14 @@ let application: AdvancedCollections | undefined;
 let stopDiagnostics: (() => void) | undefined;
 let mounted = false;
 
+/** Sanitized capability report for local Millennium logs; never loads metadata. */
+/** @ffi */
+export function metadataStatus(): string {
+	const environment = application?.environment;
+	const store = environment?.storeItemCache;
+	return JSON.stringify({ storeFound: !!store, storeInitialized: store?.m_bInitialized === true, storeTransport: !!store?.m_serviceTransport, storeQueue: typeof store?.QueueAppRequest === 'function', associationCache: !!environment?.appDetailsCache, achievementCache: !!environment?.appAchievementProgressCache, personalAchievements: typeof environment?.SteamClient?.Apps?.GetMyAchievementsForApp === 'function', achievementNotifications: typeof environment?.SteamClient?.GameSessions?.RegisterForAchievementNotification === 'function', cache: application?.metadata.supplemental.diagnostics() });
+}
+
 /** The source patch consults this bridge dynamically; missing/stopped plugins use native behavior. */
 /** @ffi */
 export const integration = {
@@ -28,7 +36,14 @@ export function disposePlugin(): boolean {
 
 export default definePlugin(() => {
 	disposePlugin();
-	const environment = globalThis as unknown as SteamEnvironment;
+	// Keep the native globals untouched. Resolve the existing initialized store
+	// cache through Millennium's module lookup, never a private network endpoint.
+	const environment = Object.create(globalThis) as SteamEnvironment;
+	try {
+		const store = findModuleExport((value) => typeof value?.Get === 'function' && typeof value?.prototype?.QueueAppRequest === 'function' && typeof value?.prototype?.GetApp === 'function');
+		environment.storeItemCache = store?.Get?.();
+		log('metadata.sources', { store: environment.storeItemCache?.m_bInitialized === true, associations: !!environment.appDetailsCache, achievements: !!environment.appAchievementProgressCache });
+	} catch { log('metadata.store unavailable; unknown values retain native results'); }
 	const repository = new RuleRepository(millenniumConfigPort());
 	const running = new AdvancedCollections(environment, repository, (target, method, callback) => {
 		const patch = afterPatch(target, method, (args, result) => {
